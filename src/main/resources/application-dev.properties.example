@@ -1,0 +1,8 @@
+spring.datasource.url=jdbc:postgresql://localhost:5433/trace
+spring.datasource.username=trace
+spring.datasource.password=change_me
+spring.datasource.driver-class-name=org.postgresql.Driver
+
+spring.jpa.hibernate.ddl-auto=update
+spring.jpa.open-in-view=false
+spring.jpa.show-sql=false

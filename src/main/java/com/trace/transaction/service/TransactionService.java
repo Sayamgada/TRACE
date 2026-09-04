@@ -45,20 +45,33 @@ public class TransactionService {
     ) {
         User user = getAuthenticatedUser(authentication);
 
-        Account senderAccount = accountRepository.findById(
-                request.senderAccountId()
-        ).orElseThrow(() -> new ResourceNotFoundException(
-                "Sender account not found: "
-                        + request.senderAccountId()
-        ));
+        Account senderAccount;
+        Account receiverAccount;
 
-        Account receiverAccount = accountRepository.findById(
-                request.receiverAccountId()
-        ).orElseThrow(() -> new ResourceNotFoundException(
-                "Receiver account not found: "
-                        + request.receiverAccountId()
-        ));
+        if (request.senderAccountId() < request.receiverAccountId()) {
 
+            senderAccount = accountRepository.findWithLockById(request.senderAccountId())
+                    .orElseThrow(()
+                            -> new ResourceNotFoundException(
+                            "Sender account not found: " + request.senderAccountId()));
+
+            receiverAccount = accountRepository.findWithLockById(request.receiverAccountId())
+                    .orElseThrow(()
+                            -> new ResourceNotFoundException(
+                            "Receiver account not found: " + request.receiverAccountId()));
+
+        } else {
+
+            receiverAccount = accountRepository.findWithLockById(request.receiverAccountId())
+                    .orElseThrow(()
+                            -> new ResourceNotFoundException(
+                            "Receiver account not found: " + request.receiverAccountId()));
+
+            senderAccount = accountRepository.findWithLockById(request.senderAccountId())
+                    .orElseThrow(()
+                            -> new ResourceNotFoundException(
+                            "Sender account not found: " + request.senderAccountId()));
+        }
         validateSenderOwnership(senderAccount, user);
 
         validateTransfer(
@@ -103,7 +116,7 @@ public class TransactionService {
         if (!senderAccount.getUser().getId().equals(user.getId())) {
             throw new ResourceNotFoundException(
                     "Sender account not found: "
-                            + senderAccount.getId()
+                    + senderAccount.getId()
             );
         }
     }

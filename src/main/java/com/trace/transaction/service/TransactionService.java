@@ -164,7 +164,7 @@ public class TransactionService {
         }
 
         if (senderAccount.getBalance().compareTo(amount) < 0) {
-            throw new IllegalArgumentException(
+            throw new InsufficientBalanceException(
                     "Insufficient account balance"
             );
         }

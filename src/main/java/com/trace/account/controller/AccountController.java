@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.trace.account.dto.AccountResponse;
 import com.trace.account.dto.CreateAccountRequest;
+import com.trace.account.dto.DepositRequest;
 import com.trace.account.service.AccountService;
 
 import jakarta.validation.Valid;
@@ -35,8 +36,8 @@ public class AccountController {
             @Valid @RequestBody CreateAccountRequest request,
             Authentication authentication
     ) {
-        AccountResponse response =
-                accountService.createAccount(request, authentication);
+        AccountResponse response
+                = accountService.createAccount(request, authentication);
 
         return ResponseEntity
                 .status(HttpStatus.CREATED)
@@ -62,6 +63,17 @@ public class AccountController {
                         accountId,
                         authentication
                 )
+        );
+    }
+
+    @PostMapping("/{accountId}/deposit")
+    public ResponseEntity<AccountResponse> deposit(
+            @PathVariable Long accountId,
+            @Valid @RequestBody DepositRequest request,
+            Authentication authentication) {
+
+        return ResponseEntity.ok(
+                accountService.deposit(accountId, request, authentication)
         );
     }
 }

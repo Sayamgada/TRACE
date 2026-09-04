@@ -10,13 +10,13 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.trace.account.dto.AccountResponse;
 import com.trace.account.dto.CreateAccountRequest;
+import com.trace.account.dto.DepositRequest;
 import com.trace.account.entity.Account;
 import com.trace.account.entity.AccountStatus;
-import com.trace.user.entity.User;
-import com.trace.user.repository.UserRepository;
-
 import com.trace.account.repository.AccountRepository;
 import com.trace.common.exception.ResourceNotFoundException;
+import com.trace.user.entity.User;
+import com.trace.user.repository.UserRepository;
 
 @Service
 public class AccountService {
@@ -76,8 +76,8 @@ public class AccountService {
 
         Account account = accountRepository.findById(accountId)
                 .orElseThrow(() -> new ResourceNotFoundException(
-                        "Account not found: " + accountId
-                ));
+                "Account not found: " + accountId
+        ));
 
         if (!account.getUser().getId().equals(user.getId())) {
             throw new ResourceNotFoundException(
@@ -97,8 +97,8 @@ public class AccountService {
 
         return userRepository.findByEmailIgnoreCase(authentication.getName())
                 .orElseThrow(() -> new ResourceNotFoundException(
-                        "Authenticated user was not found"
-                ));
+                "Authenticated user was not found"
+        ));
     }
 
     private String generateUniqueAccountNumber() {
@@ -114,13 +114,40 @@ public class AccountService {
 
     private String generateAccountNumber() {
 
-        StringBuilder builder =
-                new StringBuilder(ACCOUNT_NUMBER_LENGTH);
+        StringBuilder builder
+                = new StringBuilder(ACCOUNT_NUMBER_LENGTH);
 
         for (int i = 0; i < ACCOUNT_NUMBER_LENGTH; i++) {
             builder.append(secureRandom.nextInt(10));
         }
 
         return builder.toString();
+    }
+
+    @Transactional
+    public AccountResponse deposit(
+            Long accountId,
+            DepositRequest request,
+            Authentication authentication) {
+
+        User user = getAuthenticatedUser(authentication);
+
+        Account account = accountRepository.findById(accountId)
+                .orElseThrow(()
+                        -> new ResourceNotFoundException(
+                        "Account not found: " + accountId));
+
+        if (!account.getUser().getId().equals(user.getId())) {
+            throw new ResourceNotFoundException(
+                    "Account not found: " + accountId);
+        }
+
+        if (account.getStatus() != AccountStatus.ACTIVE) {
+            throw new AccountNotActiveException("Account is not active");
+        }
+
+        account.setBalance(account.getBalance().add(request.amount()));
+
+        return AccountResponse.from(accountRepository.save(account));
     }
 }

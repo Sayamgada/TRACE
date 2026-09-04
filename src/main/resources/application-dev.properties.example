@@ -6,3 +6,6 @@ spring.datasource.driver-class-name=org.postgresql.Driver
 spring.jpa.hibernate.ddl-auto=update
 spring.jpa.open-in-view=false
 spring.jpa.show-sql=false
+
+security.jwt.secret=${TRACE_JWT_SECRET:change_this_development_secret_key_at_least_32_bytes_long}
+security.jwt.expiration-ms=${TRACE_JWT_EXPIRATION_MS:900000}

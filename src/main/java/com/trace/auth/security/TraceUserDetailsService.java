@@ -6,6 +6,7 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
 import com.trace.user.entity.User;
+import com.trace.user.entity.UserStatus;
 import com.trace.user.repository.UserRepository;
 
 @Service
@@ -26,16 +27,16 @@ public class TraceUserDetailsService implements UserDetailsService {
                         "User not found with email: " + email
                 ));
 
-        return org.springframework.security.core.userdetails.User
-                .withUsername(user.getEmail())
-                .password(user.getPasswordHash())
-                .authorities(
-                        user.getRoles()
-                                .stream()
-                                .map(role -> role.getName().name())
-                                .toArray(String[]::new)
-                )
-                .disabled(user.getStatus().name().equals("SUSPENDED"))
-                .build();
+                return org.springframework.security.core.userdetails.User
+                        .withUsername(user.getEmail())
+                        .password(user.getPasswordHash())
+                        .authorities(
+                                user.getRoles()
+                                        .stream()
+                                        .map(role -> role.getName().name())
+                                        .toArray(String[]::new)
+                        )
+                        .disabled(user.getStatus() != UserStatus.ACTIVE)
+                        .build();
     }
 }

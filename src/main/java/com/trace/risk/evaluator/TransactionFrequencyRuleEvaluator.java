@@ -10,9 +10,11 @@ import java.time.Instant;
 import java.util.List;
 
 @Component
-public class TransactionFrequencyRuleEvaluator implements FraudRuleEvaluator {
+public class TransactionFrequencyRuleEvaluator
+        implements FraudRuleEvaluator {
 
-    private static final Duration EVALUATION_WINDOW = Duration.ofMinutes(2);
+    private static final Duration EVALUATION_WINDOW =
+            Duration.ofMinutes(2);
 
     @Override
     public FraudRuleResult evaluate(
@@ -20,15 +22,17 @@ public class TransactionFrequencyRuleEvaluator implements FraudRuleEvaluator {
             FraudRule rule,
             FraudEvaluationContext context
     ) {
-        Instant evaluationTime = context.evaluationTime() != null
-                ? context.evaluationTime()
-                : transaction.getCreatedAt();
+        Instant evaluationTime =
+                context.evaluationTime() != null
+                        ? context.evaluationTime()
+                        : transaction.getCreatedAt();
 
         if (evaluationTime == null) {
             return FraudRuleResult.notTriggered();
         }
 
-        Instant windowStart = evaluationTime.minus(EVALUATION_WINDOW);
+        Instant windowStart =
+                evaluationTime.minus(EVALUATION_WINDOW);
 
         List<Instant> recentTransactions =
                 context.recentTransactionTimes()
@@ -40,10 +44,23 @@ public class TransactionFrequencyRuleEvaluator implements FraudRuleEvaluator {
                         )
                         .toList();
 
-        BigDecimal transactionCount =
-                BigDecimal.valueOf(recentTransactions.size());
+        /*
+         * The current transaction is evaluated together with its
+         * historical transactions. The context intentionally
+         * excludes the current transaction, so add it here.
+         */
+        long transactionCount = recentTransactions.size();
 
-        if (transactionCount.compareTo(rule.getThreshold()) > 0) {
+        if (transaction.getCreatedAt() != null
+                && !transaction.getCreatedAt().isBefore(windowStart)
+                && !transaction.getCreatedAt().isAfter(evaluationTime)) {
+            transactionCount++;
+        }
+
+        BigDecimal count =
+                BigDecimal.valueOf(transactionCount);
+
+        if (count.compareTo(rule.getThreshold()) > 0) {
             return FraudRuleResult.triggered(
                     rule.getWeight(),
                     "Transaction frequency exceeds the configured threshold within the evaluation window."

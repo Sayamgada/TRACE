@@ -1,5 +1,6 @@
 package com.trace.transaction.repository;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -10,11 +11,16 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import com.trace.transaction.entity.Transaction;
 import com.trace.transaction.entity.TransactionStatus;
 
-public interface TransactionRepository extends JpaRepository<Transaction, Long> {
+public interface TransactionRepository
+        extends JpaRepository<Transaction, Long> {
 
-    Optional<Transaction> findByTransactionReference(String transactionReference);
+    Optional<Transaction> findByTransactionReference(
+            String transactionReference
+    );
 
-    boolean existsByTransactionReference(String transactionReference);
+    boolean existsByTransactionReference(
+            String transactionReference
+    );
 
     Page<Transaction> findBySenderAccountId(
             Long accountId,
@@ -26,5 +32,20 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
             Pageable pageable
     );
 
-    List<Transaction> findByStatus(TransactionStatus status);
+    List<Transaction> findByStatus(
+            TransactionStatus status
+    );
+
+    List<Transaction> findBySenderAccountIdAndCreatedAtBetween(
+            Long accountId,
+            Instant start,
+            Instant end
+    );
+
+    List<Transaction> findBySenderAccountIdAndIdNotAndCreatedAtBetween(
+            Long accountId,
+            Long transactionId,
+            Instant start,
+            Instant end
+    );
 }

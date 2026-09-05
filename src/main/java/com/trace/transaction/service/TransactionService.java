@@ -12,6 +12,7 @@ import com.trace.account.entity.Account;
 import com.trace.account.entity.AccountStatus;
 import com.trace.account.repository.AccountRepository;
 import com.trace.common.exception.ResourceNotFoundException;
+import com.trace.risk.context.FraudEvaluationContextFactory;
 import com.trace.risk.evaluator.FraudEvaluationContext;
 import com.trace.risk.scoring.RiskDecision;
 import com.trace.risk.scoring.RiskEvaluationResult;
@@ -32,17 +33,20 @@ public class TransactionService {
     private final AccountRepository accountRepository;
     private final UserRepository userRepository;
     private final RiskEvaluationService riskEvaluationService;
+    private final FraudEvaluationContextFactory fraudEvaluationContextFactory;
 
     public TransactionService(
             TransactionRepository transactionRepository,
             AccountRepository accountRepository,
             UserRepository userRepository,
-            RiskEvaluationService riskEvaluationService
+            RiskEvaluationService riskEvaluationService,
+            FraudEvaluationContextFactory fraudEvaluationContextFactory
     ) {
         this.transactionRepository = transactionRepository;
         this.accountRepository = accountRepository;
         this.userRepository = userRepository;
         this.riskEvaluationService = riskEvaluationService;
+        this.fraudEvaluationContextFactory = fraudEvaluationContextFactory;
     }
 
     @Transactional
@@ -66,40 +70,40 @@ public class TransactionService {
 
             senderAccount = accountRepository
                     .findWithLockById(request.senderAccountId())
-                    .orElseThrow(() ->
-                            new ResourceNotFoundException(
-                                    "Sender account not found: "
-                                            + request.senderAccountId()
-                            )
+                    .orElseThrow(()
+                            -> new ResourceNotFoundException(
+                            "Sender account not found: "
+                            + request.senderAccountId()
+                    )
                     );
 
             receiverAccount = accountRepository
                     .findWithLockById(request.receiverAccountId())
-                    .orElseThrow(() ->
-                            new ResourceNotFoundException(
-                                    "Receiver account not found: "
-                                            + request.receiverAccountId()
-                            )
+                    .orElseThrow(()
+                            -> new ResourceNotFoundException(
+                            "Receiver account not found: "
+                            + request.receiverAccountId()
+                    )
                     );
 
         } else {
 
             receiverAccount = accountRepository
                     .findWithLockById(request.receiverAccountId())
-                    .orElseThrow(() ->
-                            new ResourceNotFoundException(
-                                    "Receiver account not found: "
-                                            + request.receiverAccountId()
-                            )
+                    .orElseThrow(()
+                            -> new ResourceNotFoundException(
+                            "Receiver account not found: "
+                            + request.receiverAccountId()
+                    )
                     );
 
             senderAccount = accountRepository
                     .findWithLockById(request.senderAccountId())
-                    .orElseThrow(() ->
-                            new ResourceNotFoundException(
-                                    "Sender account not found: "
-                                            + request.senderAccountId()
-                            )
+                    .orElseThrow(()
+                            -> new ResourceNotFoundException(
+                            "Sender account not found: "
+                            + request.senderAccountId()
+                    )
                     );
         }
 
@@ -132,12 +136,13 @@ public class TransactionService {
          * loaded here, so the initial context contains only the
          * evaluation timestamp.
          */
-        RiskEvaluationResult riskResult =
-                riskEvaluationService.evaluate(
+        FraudEvaluationContext riskContext
+                = fraudEvaluationContextFactory.create(transaction);
+
+        RiskEvaluationResult riskResult
+                = riskEvaluationService.evaluate(
                         transaction,
-                        new FraudEvaluationContext(
-                                transaction.getCreatedAt()
-                        )
+                        riskContext
                 );
 
         transaction.setRiskScore(riskResult.riskScore());
@@ -200,7 +205,7 @@ public class TransactionService {
         if (!senderAccount.getUser().getId().equals(user.getId())) {
             throw new ResourceNotFoundException(
                     "Sender account not found: "
-                            + senderAccount.getId()
+                    + senderAccount.getId()
             );
         }
     }
@@ -283,8 +288,8 @@ public class TransactionService {
 
         return userRepository.findByEmailIgnoreCase(
                 authentication.getName()
-        ).orElseThrow(() ->
-                new ResourceNotFoundException(
+        ).orElseThrow(()
+                -> new ResourceNotFoundException(
                         "Authenticated user was not found"
                 )
         );

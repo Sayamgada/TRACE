@@ -2,6 +2,7 @@ package com.trace.transaction.service;
 
 import java.lang.reflect.Field;
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -23,6 +24,7 @@ import com.trace.account.entity.Account;
 import com.trace.account.entity.AccountStatus;
 import com.trace.account.entity.Currency;
 import com.trace.account.repository.AccountRepository;
+import com.trace.risk.context.FraudEvaluationContextFactory;
 import com.trace.risk.evaluator.FraudEvaluationContext;
 import com.trace.risk.scoring.RiskDecision;
 import com.trace.risk.scoring.RiskEvaluationResult;
@@ -53,6 +55,9 @@ class TransactionServiceTest {
 
     @Mock
     private RiskEvaluationService riskEvaluationService;
+
+    @Mock
+    private FraudEvaluationContextFactory fraudEvaluationContextFactory;
 
     @Mock
     private Authentication authentication;
@@ -101,14 +106,18 @@ class TransactionServiceTest {
 
     @Test
     void shouldApproveTransferWhenRiskDecisionIsApprove() {
-        CreateTransferRequest request = new CreateTransferRequest(
-                1L,
-                2L,
-                new BigDecimal("1500.00")
-        );
+        CreateTransferRequest request =
+                new CreateTransferRequest(
+                        1L,
+                        2L,
+                        new BigDecimal("1500.00")
+                );
 
-        when(authentication.isAuthenticated()).thenReturn(true);
-        when(authentication.getName()).thenReturn(user.getEmail());
+        when(authentication.isAuthenticated())
+                .thenReturn(true);
+
+        when(authentication.getName())
+                .thenReturn(user.getEmail());
 
         when(userRepository.findByEmailIgnoreCase(user.getEmail()))
                 .thenReturn(Optional.of(user));
@@ -120,7 +129,18 @@ class TransactionServiceTest {
                 .thenReturn(Optional.of(receiver));
 
         when(transactionRepository.save(any(Transaction.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+                .thenAnswer(invocation ->
+                        invocation.getArgument(0));
+
+        when(fraudEvaluationContextFactory.create(
+                any(Transaction.class)
+        )).thenReturn(
+                new FraudEvaluationContext(
+                        Instant.parse(
+                                "2026-09-05T10:00:00Z"
+                        )
+                )
+        );
 
         when(riskEvaluationService.evaluate(
                 any(Transaction.class),
@@ -134,8 +154,8 @@ class TransactionServiceTest {
                 )
         );
 
-        TransactionResponse response
-                = transactionService.createTransfer(
+        TransactionResponse response =
+                transactionService.createTransfer(
                         request,
                         authentication
                 );
@@ -152,20 +172,30 @@ class TransactionServiceTest {
         assertThat(receiver.getBalance())
                 .isEqualByComparingTo("6500.00");
 
-        verify(accountRepository).save(sender);
-        verify(accountRepository).save(receiver);
+        verify(fraudEvaluationContextFactory)
+                .create(any(Transaction.class));
+
+        verify(accountRepository)
+                .save(sender);
+
+        verify(accountRepository)
+                .save(receiver);
     }
 
     @Test
     void shouldNotMutateBalancesWhenRiskDecisionIsReview() {
-        CreateTransferRequest request = new CreateTransferRequest(
-                1L,
-                2L,
-                new BigDecimal("1500.00")
-        );
+        CreateTransferRequest request =
+                new CreateTransferRequest(
+                        1L,
+                        2L,
+                        new BigDecimal("1500.00")
+                );
 
-        when(authentication.isAuthenticated()).thenReturn(true);
-        when(authentication.getName()).thenReturn(user.getEmail());
+        when(authentication.isAuthenticated())
+                .thenReturn(true);
+
+        when(authentication.getName())
+                .thenReturn(user.getEmail());
 
         when(userRepository.findByEmailIgnoreCase(user.getEmail()))
                 .thenReturn(Optional.of(user));
@@ -177,7 +207,18 @@ class TransactionServiceTest {
                 .thenReturn(Optional.of(receiver));
 
         when(transactionRepository.save(any(Transaction.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+                .thenAnswer(invocation ->
+                        invocation.getArgument(0));
+
+        when(fraudEvaluationContextFactory.create(
+                any(Transaction.class)
+        )).thenReturn(
+                new FraudEvaluationContext(
+                        Instant.parse(
+                                "2026-09-05T10:00:00Z"
+                        )
+                )
+        );
 
         when(riskEvaluationService.evaluate(
                 any(Transaction.class),
@@ -191,8 +232,8 @@ class TransactionServiceTest {
                 )
         );
 
-        TransactionResponse response
-                = transactionService.createTransfer(
+        TransactionResponse response =
+                transactionService.createTransfer(
                         request,
                         authentication
                 );
@@ -209,20 +250,30 @@ class TransactionServiceTest {
         assertThat(receiver.getBalance())
                 .isEqualByComparingTo("5000.00");
 
-        verify(accountRepository, never()).save(sender);
-        verify(accountRepository, never()).save(receiver);
+        verify(fraudEvaluationContextFactory)
+                .create(any(Transaction.class));
+
+        verify(accountRepository, never())
+                .save(sender);
+
+        verify(accountRepository, never())
+                .save(receiver);
     }
 
     @Test
     void shouldNotMutateBalancesWhenRiskDecisionIsBlock() {
-        CreateTransferRequest request = new CreateTransferRequest(
-                1L,
-                2L,
-                new BigDecimal("1500.00")
-        );
+        CreateTransferRequest request =
+                new CreateTransferRequest(
+                        1L,
+                        2L,
+                        new BigDecimal("1500.00")
+                );
 
-        when(authentication.isAuthenticated()).thenReturn(true);
-        when(authentication.getName()).thenReturn(user.getEmail());
+        when(authentication.isAuthenticated())
+                .thenReturn(true);
+
+        when(authentication.getName())
+                .thenReturn(user.getEmail());
 
         when(userRepository.findByEmailIgnoreCase(user.getEmail()))
                 .thenReturn(Optional.of(user));
@@ -234,7 +285,18 @@ class TransactionServiceTest {
                 .thenReturn(Optional.of(receiver));
 
         when(transactionRepository.save(any(Transaction.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+                .thenAnswer(invocation ->
+                        invocation.getArgument(0));
+
+        when(fraudEvaluationContextFactory.create(
+                any(Transaction.class)
+        )).thenReturn(
+                new FraudEvaluationContext(
+                        Instant.parse(
+                                "2026-09-05T10:00:00Z"
+                        )
+                )
+        );
 
         when(riskEvaluationService.evaluate(
                 any(Transaction.class),
@@ -244,12 +306,15 @@ class TransactionServiceTest {
                         new BigDecimal("70.00"),
                         RiskLevel.HIGH,
                         RiskDecision.BLOCK,
-                        List.of("HIGH_AMOUNT", "TRANSACTION_FREQUENCY")
+                        List.of(
+                                "HIGH_AMOUNT",
+                                "TRANSACTION_FREQUENCY"
+                        )
                 )
         );
 
-        TransactionResponse response
-                = transactionService.createTransfer(
+        TransactionResponse response =
+                transactionService.createTransfer(
                         request,
                         authentication
                 );
@@ -266,22 +331,32 @@ class TransactionServiceTest {
         assertThat(receiver.getBalance())
                 .isEqualByComparingTo("5000.00");
 
-        verify(accountRepository, never()).save(sender);
-        verify(accountRepository, never()).save(receiver);
+        verify(fraudEvaluationContextFactory)
+                .create(any(Transaction.class));
+
+        verify(accountRepository, never())
+                .save(sender);
+
+        verify(accountRepository, never())
+                .save(receiver);
     }
 
     @Test
     void shouldPreserveInsufficientBalanceValidation() {
         sender.setBalance(new BigDecimal("500.00"));
 
-        CreateTransferRequest request = new CreateTransferRequest(
-                1L,
-                2L,
-                new BigDecimal("1500.00")
-        );
+        CreateTransferRequest request =
+                new CreateTransferRequest(
+                        1L,
+                        2L,
+                        new BigDecimal("1500.00")
+                );
 
-        when(authentication.isAuthenticated()).thenReturn(true);
-        when(authentication.getName()).thenReturn(user.getEmail());
+        when(authentication.isAuthenticated())
+                .thenReturn(true);
+
+        when(authentication.getName())
+                .thenReturn(user.getEmail());
 
         when(userRepository.findByEmailIgnoreCase(user.getEmail()))
                 .thenReturn(Optional.of(user));
@@ -292,13 +367,18 @@ class TransactionServiceTest {
         when(accountRepository.findWithLockById(2L))
                 .thenReturn(Optional.of(receiver));
 
-        assertThatThrownBy(()
-                -> transactionService.createTransfer(
+        assertThatThrownBy(() ->
+                transactionService.createTransfer(
                         request,
                         authentication
                 )
         )
-                .isInstanceOf(InsufficientBalanceException.class);
+                .isInstanceOf(
+                        InsufficientBalanceException.class
+                );
+
+        verify(fraudEvaluationContextFactory, never())
+                .create(any(Transaction.class));
 
         verify(riskEvaluationService, never())
                 .evaluate(any(), any());
@@ -310,11 +390,17 @@ class TransactionServiceTest {
                 .isEqualByComparingTo("5000.00");
     }
 
-    private void setEntityId(Object entity, Long id) {
+    private void setEntityId(
+            Object entity,
+            Long id
+    ) {
         try {
-            Field idField = entity.getClass().getDeclaredField("id");
+            Field idField =
+                    entity.getClass().getDeclaredField("id");
+
             idField.setAccessible(true);
             idField.set(entity, id);
+
         } catch (ReflectiveOperationException e) {
             throw new IllegalStateException(
                     "Failed to set test entity ID",

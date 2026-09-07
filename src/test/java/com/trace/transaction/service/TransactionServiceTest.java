@@ -24,6 +24,7 @@ import com.trace.account.entity.Account;
 import com.trace.account.entity.AccountStatus;
 import com.trace.account.entity.Currency;
 import com.trace.account.repository.AccountRepository;
+import com.trace.fraud.service.FraudAlertService;
 import com.trace.risk.context.FraudEvaluationContextFactory;
 import com.trace.risk.evaluator.FraudEvaluationContext;
 import com.trace.risk.scoring.RiskDecision;
@@ -58,6 +59,9 @@ class TransactionServiceTest {
 
     @Mock
     private FraudEvaluationContextFactory fraudEvaluationContextFactory;
+
+    @Mock
+    private FraudAlertService fraudAlertService;
 
     @Mock
     private Authentication authentication;
@@ -106,8 +110,8 @@ class TransactionServiceTest {
 
     @Test
     void shouldApproveTransferWhenRiskDecisionIsApprove() {
-        CreateTransferRequest request =
-                new CreateTransferRequest(
+        CreateTransferRequest request
+                = new CreateTransferRequest(
                         1L,
                         2L,
                         new BigDecimal("1500.00")
@@ -129,8 +133,8 @@ class TransactionServiceTest {
                 .thenReturn(Optional.of(receiver));
 
         when(transactionRepository.save(any(Transaction.class)))
-                .thenAnswer(invocation ->
-                        invocation.getArgument(0));
+                .thenAnswer(invocation
+                        -> invocation.getArgument(0));
 
         when(fraudEvaluationContextFactory.create(
                 any(Transaction.class)
@@ -154,8 +158,8 @@ class TransactionServiceTest {
                 )
         );
 
-        TransactionResponse response =
-                transactionService.createTransfer(
+        TransactionResponse response
+                = transactionService.createTransfer(
                         request,
                         authentication
                 );
@@ -180,12 +184,18 @@ class TransactionServiceTest {
 
         verify(accountRepository)
                 .save(receiver);
+
+        verify(fraudAlertService, never())
+                .createAlert(
+                        any(Transaction.class),
+                        any(RiskEvaluationResult.class)
+                );
     }
 
     @Test
     void shouldNotMutateBalancesWhenRiskDecisionIsReview() {
-        CreateTransferRequest request =
-                new CreateTransferRequest(
+        CreateTransferRequest request
+                = new CreateTransferRequest(
                         1L,
                         2L,
                         new BigDecimal("1500.00")
@@ -207,8 +217,8 @@ class TransactionServiceTest {
                 .thenReturn(Optional.of(receiver));
 
         when(transactionRepository.save(any(Transaction.class)))
-                .thenAnswer(invocation ->
-                        invocation.getArgument(0));
+                .thenAnswer(invocation
+                        -> invocation.getArgument(0));
 
         when(fraudEvaluationContextFactory.create(
                 any(Transaction.class)
@@ -220,20 +230,21 @@ class TransactionServiceTest {
                 )
         );
 
-        when(riskEvaluationService.evaluate(
-                any(Transaction.class),
-                any(FraudEvaluationContext.class)
-        )).thenReturn(
-                new RiskEvaluationResult(
+        RiskEvaluationResult riskResult
+                = new RiskEvaluationResult(
                         new BigDecimal("30.00"),
                         RiskLevel.MEDIUM,
                         RiskDecision.REVIEW,
                         List.of("HIGH_AMOUNT")
-                )
-        );
+                );
 
-        TransactionResponse response =
-                transactionService.createTransfer(
+        when(riskEvaluationService.evaluate(
+                any(Transaction.class),
+                any(FraudEvaluationContext.class)
+        )).thenReturn(riskResult);
+
+        TransactionResponse response
+                = transactionService.createTransfer(
                         request,
                         authentication
                 );
@@ -258,12 +269,18 @@ class TransactionServiceTest {
 
         verify(accountRepository, never())
                 .save(receiver);
+
+        verify(fraudAlertService)
+                .createAlert(
+                        any(Transaction.class),
+                        org.mockito.ArgumentMatchers.eq(riskResult)
+                );
     }
 
     @Test
     void shouldNotMutateBalancesWhenRiskDecisionIsBlock() {
-        CreateTransferRequest request =
-                new CreateTransferRequest(
+        CreateTransferRequest request
+                = new CreateTransferRequest(
                         1L,
                         2L,
                         new BigDecimal("1500.00")
@@ -285,8 +302,8 @@ class TransactionServiceTest {
                 .thenReturn(Optional.of(receiver));
 
         when(transactionRepository.save(any(Transaction.class)))
-                .thenAnswer(invocation ->
-                        invocation.getArgument(0));
+                .thenAnswer(invocation
+                        -> invocation.getArgument(0));
 
         when(fraudEvaluationContextFactory.create(
                 any(Transaction.class)
@@ -298,11 +315,8 @@ class TransactionServiceTest {
                 )
         );
 
-        when(riskEvaluationService.evaluate(
-                any(Transaction.class),
-                any(FraudEvaluationContext.class)
-        )).thenReturn(
-                new RiskEvaluationResult(
+        RiskEvaluationResult riskResult
+                = new RiskEvaluationResult(
                         new BigDecimal("70.00"),
                         RiskLevel.HIGH,
                         RiskDecision.BLOCK,
@@ -310,11 +324,15 @@ class TransactionServiceTest {
                                 "HIGH_AMOUNT",
                                 "TRANSACTION_FREQUENCY"
                         )
-                )
-        );
+                );
 
-        TransactionResponse response =
-                transactionService.createTransfer(
+        when(riskEvaluationService.evaluate(
+                any(Transaction.class),
+                any(FraudEvaluationContext.class)
+        )).thenReturn(riskResult);
+
+        TransactionResponse response
+                = transactionService.createTransfer(
                         request,
                         authentication
                 );
@@ -339,14 +357,20 @@ class TransactionServiceTest {
 
         verify(accountRepository, never())
                 .save(receiver);
+
+        verify(fraudAlertService)
+                .createAlert(
+                        any(Transaction.class),
+                        org.mockito.ArgumentMatchers.eq(riskResult)
+                );
     }
 
     @Test
     void shouldPreserveInsufficientBalanceValidation() {
         sender.setBalance(new BigDecimal("500.00"));
 
-        CreateTransferRequest request =
-                new CreateTransferRequest(
+        CreateTransferRequest request
+                = new CreateTransferRequest(
                         1L,
                         2L,
                         new BigDecimal("1500.00")
@@ -367,8 +391,8 @@ class TransactionServiceTest {
         when(accountRepository.findWithLockById(2L))
                 .thenReturn(Optional.of(receiver));
 
-        assertThatThrownBy(() ->
-                transactionService.createTransfer(
+        assertThatThrownBy(()
+                -> transactionService.createTransfer(
                         request,
                         authentication
                 )
@@ -383,6 +407,12 @@ class TransactionServiceTest {
         verify(riskEvaluationService, never())
                 .evaluate(any(), any());
 
+        verify(fraudAlertService, never())
+                .createAlert(
+                        any(Transaction.class),
+                        any(RiskEvaluationResult.class)
+                );
+
         assertThat(sender.getBalance())
                 .isEqualByComparingTo("500.00");
 
@@ -395,8 +425,8 @@ class TransactionServiceTest {
             Long id
     ) {
         try {
-            Field idField =
-                    entity.getClass().getDeclaredField("id");
+            Field idField
+                    = entity.getClass().getDeclaredField("id");
 
             idField.setAccessible(true);
             idField.set(entity, id);

@@ -12,6 +12,7 @@ import com.trace.account.entity.Account;
 import com.trace.account.entity.AccountStatus;
 import com.trace.account.repository.AccountRepository;
 import com.trace.common.exception.ResourceNotFoundException;
+import com.trace.fraud.service.FraudAlertService;
 import com.trace.risk.context.FraudEvaluationContextFactory;
 import com.trace.risk.evaluator.FraudEvaluationContext;
 import com.trace.risk.scoring.RiskDecision;
@@ -34,19 +35,22 @@ public class TransactionService {
     private final UserRepository userRepository;
     private final RiskEvaluationService riskEvaluationService;
     private final FraudEvaluationContextFactory fraudEvaluationContextFactory;
+    private final FraudAlertService fraudAlertService;
 
     public TransactionService(
             TransactionRepository transactionRepository,
             AccountRepository accountRepository,
             UserRepository userRepository,
             RiskEvaluationService riskEvaluationService,
-            FraudEvaluationContextFactory fraudEvaluationContextFactory
+            FraudEvaluationContextFactory fraudEvaluationContextFactory,
+            FraudAlertService fraudAlertService
     ) {
         this.transactionRepository = transactionRepository;
         this.accountRepository = accountRepository;
         this.userRepository = userRepository;
         this.riskEvaluationService = riskEvaluationService;
         this.fraudEvaluationContextFactory = fraudEvaluationContextFactory;
+        this.fraudAlertService = fraudAlertService;
     }
 
     @Transactional
@@ -157,9 +161,15 @@ public class TransactionService {
             transaction.setStatus(TransactionStatus.BLOCKED);
             transaction.setProcessedAt(Instant.now());
 
-            return TransactionResponse.from(
-                    transactionRepository.save(transaction)
+            Transaction savedTransaction
+                    = transactionRepository.save(transaction);
+
+            fraudAlertService.createAlert(
+                    savedTransaction,
+                    riskResult
             );
+
+            return TransactionResponse.from(savedTransaction);
         }
 
         /*
@@ -172,11 +182,16 @@ public class TransactionService {
             transaction.setStatus(TransactionStatus.FLAGGED);
             transaction.setProcessedAt(Instant.now());
 
-            return TransactionResponse.from(
-                    transactionRepository.save(transaction)
-            );
-        }
+            Transaction savedTransaction
+                    = transactionRepository.save(transaction);
 
+            fraudAlertService.createAlert(
+                    savedTransaction,
+                    riskResult
+            );
+
+            return TransactionResponse.from(savedTransaction);
+        }
         /*
          * APPROVE:
          * Only an approved risk decision is allowed to reach the

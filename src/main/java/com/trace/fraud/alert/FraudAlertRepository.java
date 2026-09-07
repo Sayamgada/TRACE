@@ -6,8 +6,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
-public interface FraudAlertRepository
-        extends JpaRepository<FraudAlert, Long> {
+public interface FraudAlertRepository extends JpaRepository<FraudAlert, Long> {
 
     Optional<FraudAlert> findByTransactionId(Long transactionId);
 
@@ -17,6 +16,12 @@ public interface FraudAlertRepository
     );
 
     Page<FraudAlert> findBySeverity(
+            FraudAlertSeverity severity,
+            Pageable pageable
+    );
+
+    Page<FraudAlert> findByStatusAndSeverity(
+            FraudAlertStatus status,
             FraudAlertSeverity severity,
             Pageable pageable
     );

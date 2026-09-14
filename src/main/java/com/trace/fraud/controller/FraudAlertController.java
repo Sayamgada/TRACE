@@ -29,17 +29,15 @@ public class FraudAlertController {
 
     public Page<FraudAlertResponse> getAlerts(
             @RequestParam(name = "status", required = false) FraudAlertStatus status,
-@RequestParam(name = "severity", required = false) FraudAlertSeverity severity,
-            Pageable pageable
-    ) {
+            @RequestParam(name = "severity", required = false) FraudAlertSeverity severity,
+            Pageable pageable) {
         Page<FraudAlert> alerts;
 
         if (status != null && severity != null) {
             alerts = fraudAlertService.getAlertsByStatusAndSeverity(
                     status,
                     severity,
-                    pageable
-            );
+                    pageable);
         } else if (status != null) {
             alerts = fraudAlertService.getAlertsByStatus(status, pageable);
         } else if (severity != null) {
@@ -53,11 +51,9 @@ public class FraudAlertController {
 
     @GetMapping("/{alertId}")
     public ResponseEntity<FraudAlertResponse> getAlert(
-            @PathVariable Long alertId
-    ) {
+            @PathVariable Long alertId) {
         return ResponseEntity.ok(
-                toResponse(fraudAlertService.getAlert(alertId))
-        );
+                toResponse(fraudAlertService.getAlert(alertId)));
     }
 
     private FraudAlertResponse toResponse(FraudAlert alert) {
@@ -68,7 +64,6 @@ public class FraudAlertController {
                 alert.getSeverity(),
                 alert.getStatus(),
                 alert.getReasons(),
-                alert.getCreatedAt()
-        );
+                alert.getCreatedAt());
     }
 }

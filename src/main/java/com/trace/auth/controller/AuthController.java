@@ -10,8 +10,10 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.trace.auth.dto.LoginRequest;
 import com.trace.auth.dto.LoginResponse;
+import com.trace.auth.dto.RefreshTokenRequest;
 import com.trace.auth.dto.RegisterRequest;
 import com.trace.auth.dto.RegistrationResponse;
+import com.trace.auth.dto.TokenRefreshResponse;
 import com.trace.auth.service.AuthService;
 
 import jakarta.validation.Valid;
@@ -29,8 +31,7 @@ public class AuthController {
 
     @PostMapping("/register")
     public ResponseEntity<RegistrationResponse> register(
-            @Valid @RequestBody RegisterRequest request
-    ) {
+            @Valid @RequestBody RegisterRequest request) {
         RegistrationResponse response = authService.register(request);
 
         return ResponseEntity
@@ -40,9 +41,16 @@ public class AuthController {
 
     @PostMapping("/login")
     public ResponseEntity<LoginResponse> login(
-            @Valid @RequestBody LoginRequest request
-    ) {
+            @Valid @RequestBody LoginRequest request) {
         LoginResponse response = authService.login(request);
+
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/refresh")
+    public ResponseEntity<TokenRefreshResponse> refresh(
+            @Valid @RequestBody RefreshTokenRequest request) {
+        TokenRefreshResponse response = authService.refresh(request);
 
         return ResponseEntity.ok(response);
     }

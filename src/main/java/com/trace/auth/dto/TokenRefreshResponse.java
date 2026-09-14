@@ -1,6 +1,6 @@
 package com.trace.auth.dto;
 
-public record LoginResponse(
+public record TokenRefreshResponse(
 
         String accessToken,
         String refreshToken,

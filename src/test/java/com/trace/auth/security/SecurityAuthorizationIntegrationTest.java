@@ -234,4 +234,51 @@ class SecurityAuthorizationIntegrationTest {
                                                                 .roles("AUDITOR")))
                                 .andExpect(status().isForbidden());
         }
+
+        @Test
+        void unauthenticatedUserCannotAccessFraudCases() throws Exception {
+                mockMvc.perform(
+                                get("/api/fraud/cases"))
+                                .andExpect(status().isUnauthorized());
+        }
+
+        @Test
+        void customerCannotAccessFraudCases() throws Exception {
+                mockMvc.perform(
+                                get("/api/fraud/cases")
+                                                .with(user("customer@example.com").roles("CUSTOMER")))
+                                .andExpect(status().isForbidden());
+        }
+
+        @Test
+        void bankEmployeeCannotAccessFraudCases() throws Exception {
+                mockMvc.perform(
+                                get("/api/fraud/cases")
+                                                .with(user("employee@example.com").roles("BANK_EMPLOYEE")))
+                                .andExpect(status().isForbidden());
+        }
+
+        @Test
+        void adminCannotAccessFraudCases() throws Exception {
+                mockMvc.perform(
+                                get("/api/fraud/cases")
+                                                .with(user("admin@example.com").roles("ADMIN")))
+                                .andExpect(status().isForbidden());
+        }
+
+        @Test
+        void auditorCannotAccessFraudCases() throws Exception {
+                mockMvc.perform(
+                                get("/api/fraud/cases")
+                                                .with(user("auditor@example.com").roles("AUDITOR")))
+                                .andExpect(status().isForbidden());
+        }
+
+        @Test
+        void fraudAnalystCanAccessFraudCases() throws Exception {
+                mockMvc.perform(
+                                get("/api/fraud/cases")
+                                                .with(user("analyst@example.com").roles("FRAUD_ANALYST")))
+                                .andExpect(status().isOk());
+        }
 }

@@ -14,6 +14,8 @@ import com.trace.account.dto.DepositRequest;
 import com.trace.account.entity.Account;
 import com.trace.account.entity.AccountStatus;
 import com.trace.account.repository.AccountRepository;
+import com.trace.audit.entity.AuditAction;
+import com.trace.audit.service.AuditLogService;
 import com.trace.common.exception.ResourceNotFoundException;
 import com.trace.user.entity.User;
 import com.trace.user.repository.UserRepository;
@@ -25,21 +27,22 @@ public class AccountService {
 
     private final AccountRepository accountRepository;
     private final UserRepository userRepository;
+    private final AuditLogService auditLogService;
     private final SecureRandom secureRandom = new SecureRandom();
 
     public AccountService(
             AccountRepository accountRepository,
-            UserRepository userRepository
-    ) {
+            UserRepository userRepository,
+            AuditLogService auditLogService) {
         this.accountRepository = accountRepository;
         this.userRepository = userRepository;
+        this.auditLogService = auditLogService;
     }
 
     @Transactional
     public AccountResponse createAccount(
             CreateAccountRequest request,
-            Authentication authentication
-    ) {
+            Authentication authentication) {
         User user = getAuthenticatedUser(authentication);
 
         String accountNumber = generateUniqueAccountNumber();
@@ -49,16 +52,14 @@ public class AccountService {
                 user,
                 BigDecimal.ZERO.setScale(2),
                 request.currency(),
-                AccountStatus.ACTIVE
-        );
+                AccountStatus.ACTIVE);
 
         return AccountResponse.from(accountRepository.save(account));
     }
 
     @Transactional(readOnly = true)
     public List<AccountResponse> getMyAccounts(
-            Authentication authentication
-    ) {
+            Authentication authentication) {
         User user = getAuthenticatedUser(authentication);
 
         return accountRepository.findByUserId(user.getId())
@@ -70,19 +71,16 @@ public class AccountService {
     @Transactional(readOnly = true)
     public AccountResponse getMyAccount(
             Long accountId,
-            Authentication authentication
-    ) {
+            Authentication authentication) {
         User user = getAuthenticatedUser(authentication);
 
         Account account = accountRepository.findById(accountId)
                 .orElseThrow(() -> new ResourceNotFoundException(
-                "Account not found: " + accountId
-        ));
+                        "Account not found: " + accountId));
 
         if (!account.getUser().getId().equals(user.getId())) {
             throw new ResourceNotFoundException(
-                    "Account not found: " + accountId
-            );
+                    "Account not found: " + accountId);
         }
 
         return AccountResponse.from(account);
@@ -97,8 +95,7 @@ public class AccountService {
 
         return userRepository.findByEmailIgnoreCase(authentication.getName())
                 .orElseThrow(() -> new ResourceNotFoundException(
-                "Authenticated user was not found"
-        ));
+                        "Authenticated user was not found"));
     }
 
     private String generateUniqueAccountNumber() {
@@ -114,8 +111,7 @@ public class AccountService {
 
     private String generateAccountNumber() {
 
-        StringBuilder builder
-                = new StringBuilder(ACCOUNT_NUMBER_LENGTH);
+        StringBuilder builder = new StringBuilder(ACCOUNT_NUMBER_LENGTH);
 
         for (int i = 0; i < ACCOUNT_NUMBER_LENGTH; i++) {
             builder.append(secureRandom.nextInt(10));
@@ -133,8 +129,7 @@ public class AccountService {
         User user = getAuthenticatedUser(authentication);
 
         Account account = accountRepository.findById(accountId)
-                .orElseThrow(()
-                        -> new ResourceNotFoundException(
+                .orElseThrow(() -> new ResourceNotFoundException(
                         "Account not found: " + accountId));
 
         if (!account.getUser().getId().equals(user.getId())) {
@@ -149,5 +144,37 @@ public class AccountService {
         account.setBalance(account.getBalance().add(request.amount()));
 
         return AccountResponse.from(accountRepository.save(account));
+    }
+
+    @Transactional
+    public AccountResponse freezeAccount(
+            Long accountId,
+            Authentication authentication) {
+        User user = getAuthenticatedUser(authentication);
+
+        Account account = accountRepository.findById(accountId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Account not found: " + accountId));
+
+        if (account.getStatus() == AccountStatus.FROZEN) {
+            throw new IllegalStateException("Account is already frozen");
+        }
+
+        AccountStatus oldStatus = account.getStatus();
+
+        account.setStatus(AccountStatus.FROZEN);
+
+        Account savedAccount = accountRepository.save(account);
+
+        auditLogService.record(
+                user.getId(),
+                AuditAction.ACCOUNT_FROZEN,
+                "Account",
+                savedAccount.getId(),
+                oldStatus.name(),
+                savedAccount.getStatus().name(),
+                null);
+
+        return AccountResponse.from(savedAccount);
     }
 }

@@ -7,6 +7,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.trace.audit.entity.AuditAction;
+import com.trace.audit.service.AuditLogService;
 import com.trace.auth.dto.LoginRequest;
 import com.trace.auth.dto.LoginResponse;
 import com.trace.auth.dto.RefreshTokenRequest;
@@ -34,6 +36,7 @@ public class AuthService {
         private final JwtService jwtService;
         private final RefreshTokenService refreshTokenService;
         private final TraceUserDetailsService userDetailsService;
+        private final AuditLogService auditLogService;
 
         public AuthService(
                         UserRepository userRepository,
@@ -42,7 +45,8 @@ public class AuthService {
                         AuthenticationManager authenticationManager,
                         JwtService jwtService,
                         RefreshTokenService refreshTokenService,
-                        TraceUserDetailsService userDetailsService) {
+                        TraceUserDetailsService userDetailsService,
+                        AuditLogService auditLogService) {
                 this.userRepository = userRepository;
                 this.roleRepository = roleRepository;
                 this.passwordEncoder = passwordEncoder;
@@ -50,6 +54,7 @@ public class AuthService {
                 this.jwtService = jwtService;
                 this.refreshTokenService = refreshTokenService;
                 this.userDetailsService = userDetailsService;
+                this.auditLogService = auditLogService;
         }
 
         @Transactional
@@ -100,6 +105,15 @@ public class AuthService {
                 User user = userRepository.findByEmailIgnoreCase(email)
                                 .orElseThrow(() -> new IllegalStateException(
                                                 "Authenticated user no longer exists"));
+
+                auditLogService.record(
+                                user.getId(),
+                                AuditAction.USER_LOGIN,
+                                "User",
+                                user.getId(),
+                                null,
+                                "LOGIN_SUCCESS",
+                                null);
 
                 String refreshToken = refreshTokenService.createToken(user);
 

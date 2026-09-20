@@ -1,212 +1,307 @@
 package com.trace.auth.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import org.mockito.Mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.security.authentication.AuthenticationManager;
 
+import com.trace.audit.entity.AuditAction;
+import com.trace.audit.service.AuditLogService;
+import com.trace.auth.dto.LoginRequest;
+import com.trace.auth.dto.LoginResponse;
 import com.trace.auth.dto.RefreshTokenRequest;
 import com.trace.auth.dto.TokenRefreshResponse;
-import com.trace.auth.refresh.RefreshToken;
 import com.trace.auth.refresh.InvalidRefreshTokenException;
+import com.trace.auth.refresh.RefreshToken;
 import com.trace.auth.refresh.RefreshTokenService;
 import com.trace.auth.security.JwtService;
 import com.trace.auth.security.TraceUserDetailsService;
-import com.trace.user.repository.RoleRepository;
 import com.trace.user.entity.User;
+import com.trace.user.repository.RoleRepository;
 import com.trace.user.repository.UserRepository;
 
 @ExtendWith(MockitoExtension.class)
 class AuthServiceTest {
 
-    @Mock
-    private UserRepository userRepository;
+        @Mock
+        private UserRepository userRepository;
 
-    @Mock
-    private RoleRepository roleRepository;
+        @Mock
+        private RoleRepository roleRepository;
 
-    @Mock
-    private PasswordEncoder passwordEncoder;
+        @Mock
+        private PasswordEncoder passwordEncoder;
 
-    @Mock
-    private AuthenticationManager authenticationManager;
+        @Mock
+        private AuthenticationManager authenticationManager;
 
-    @Mock
-    private JwtService jwtService;
+        @Mock
+        private JwtService jwtService;
 
-    @Mock
-    private RefreshTokenService refreshTokenService;
+        @Mock
+        private RefreshTokenService refreshTokenService;
 
-    @Mock
-    private TraceUserDetailsService userDetailsService;
+        @Mock
+        private TraceUserDetailsService userDetailsService;
 
-    @Mock
-    private User user;
+        @Mock
+        private AuditLogService auditLogService;
 
-    @Mock
-    private RefreshToken currentToken;
+        @Mock
+        private User user;
 
-    @Mock
-    private UserDetails userDetails;
+        @Mock
+        private RefreshToken currentToken;
 
-    private AuthService authService;
+        @Mock
+        private UserDetails userDetails;
 
-    @BeforeEach
-    void setUp() {
-        authService = new AuthService(
-                userRepository,
-                roleRepository,
-                passwordEncoder,
-                authenticationManager,
-                jwtService,
-                refreshTokenService,
-                userDetailsService
-        );
-    }
+        private AuthService authService;
 
-    @Test
-    void shouldRotateRefreshTokenAndGenerateNewAccessToken() {
+        @BeforeEach
+        void setUp() {
+                authService = new AuthService(
+                                userRepository,
+                                roleRepository,
+                                passwordEncoder,
+                                authenticationManager,
+                                jwtService,
+                                refreshTokenService,
+                                userDetailsService,
+                                auditLogService);
+        }
 
-        String oldRefreshToken = "old-refresh-token";
-        String newRefreshToken = "new-refresh-token";
-        String accessToken = "new-access-token";
+        @Test
+        void shouldAuditSuccessfulLogin() {
 
-        RefreshTokenRequest request =
-                new RefreshTokenRequest(oldRefreshToken);
+                String email = "customer@trace.local";
+                String password = "password";
+                String accessToken = "access-token";
+                String refreshToken = "refresh-token";
 
-        when(refreshTokenService.validateToken(oldRefreshToken))
-                .thenReturn(currentToken);
+                LoginRequest request = new LoginRequest(email, password);
 
-        when(currentToken.getUser())
-                .thenReturn(user);
+                UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
+                                userDetails,
+                                null);
 
-        when(user.getEmail())
-                .thenReturn("customer@trace.local");
+                when(authenticationManager.authenticate(any(
+                                UsernamePasswordAuthenticationToken.class)))
+                                .thenReturn(authentication);
 
-        when(userDetailsService.loadUserByUsername(
-                "customer@trace.local"))
-                .thenReturn(userDetails);
+                when(jwtService.generateToken(userDetails))
+                                .thenReturn(accessToken);
 
-        when(jwtService.generateToken(userDetails))
-                .thenReturn(accessToken);
+                when(userRepository.findByEmailIgnoreCase(email))
+                                .thenReturn(java.util.Optional.of(user));
 
-        when(refreshTokenService.createToken(user))
-                .thenReturn(newRefreshToken);
+                when(user.getId())
+                                .thenReturn(42L);
 
-        when(jwtService.getExpirationMillis())
-                .thenReturn(900000L);
+                when(refreshTokenService.createToken(user))
+                                .thenReturn(refreshToken);
 
-        TokenRefreshResponse response =
-                authService.refresh(request);
+                when(jwtService.getExpirationMillis())
+                                .thenReturn(900000L);
 
-        assertThat(response.accessToken())
-                .isEqualTo(accessToken);
+                LoginResponse response = authService.login(request);
 
-        assertThat(response.refreshToken())
-                .isEqualTo(newRefreshToken);
+                assertThat(response.accessToken())
+                                .isEqualTo(accessToken);
 
-        assertThat(response.tokenType())
-                .isEqualTo("Bearer");
+                assertThat(response.refreshToken())
+                                .isEqualTo(refreshToken);
 
-        assertThat(response.expiresIn())
-                .isEqualTo(900000L);
+                assertThat(response.tokenType())
+                                .isEqualTo("Bearer");
 
-        verify(refreshTokenService)
-                .validateToken(oldRefreshToken);
+                assertThat(response.expiresIn())
+                                .isEqualTo(900000L);
 
-        verify(currentToken)
-                .revoke();
+                verify(auditLogService).record(
+                                42L,
+                                AuditAction.USER_LOGIN,
+                                "User",
+                                42L,
+                                null,
+                                "LOGIN_SUCCESS",
+                                null);
+        }
 
-        verify(userDetailsService)
-                .loadUserByUsername("customer@trace.local");
+        @Test
+        void shouldNotAuditFailedLogin() {
 
-        verify(jwtService)
-                .generateToken(userDetails);
+                String email = "customer@trace.local";
+                String password = "wrong-password";
 
-        verify(refreshTokenService)
-                .createToken(user);
-    }
+                LoginRequest request = new LoginRequest(email, password);
 
-    @Test
-    void shouldNotCreateNewTokenBeforeValidatingCurrentToken() {
+                when(authenticationManager.authenticate(any(
+                                UsernamePasswordAuthenticationToken.class)))
+                                .thenThrow(new RuntimeException("Authentication failed"));
 
-        String refreshToken = "invalid-refresh-token";
+                org.assertj.core.api.Assertions.assertThatThrownBy(
+                                () -> authService.login(request))
+                                .isInstanceOf(RuntimeException.class)
+                                .hasMessage("Authentication failed");
 
-        RefreshTokenRequest request =
-                new RefreshTokenRequest(refreshToken);
+                verify(auditLogService, never()).record(
+                                any(),
+                                eq(AuditAction.USER_LOGIN),
+                                any(),
+                                any(),
+                                any(),
+                                any(),
+                                any());
 
-        when(refreshTokenService.validateToken(refreshToken))
-                .thenThrow(new InvalidRefreshTokenException(
-                        "Invalid refresh token"));
+                verify(userRepository, never())
+                                .findByEmailIgnoreCase(anyString());
 
-        org.assertj.core.api.Assertions.assertThatThrownBy(
-                () -> authService.refresh(request))
-                .isInstanceOf(InvalidRefreshTokenException.class)
-                .hasMessage("Invalid refresh token");
+                verify(refreshTokenService, never())
+                                .createToken(any(User.class));
+        }
 
-        verify(refreshTokenService)
-                .validateToken(refreshToken);
+        @Test
+        void shouldRotateRefreshTokenAndGenerateNewAccessToken() {
 
-        verify(refreshTokenService, never())
-                .createToken(any(User.class));
+                String oldRefreshToken = "old-refresh-token";
+                String newRefreshToken = "new-refresh-token";
+                String accessToken = "new-access-token";
 
-        verify(currentToken, never())
-                .revoke();
+                RefreshTokenRequest request = new RefreshTokenRequest(oldRefreshToken);
 
-        verify(jwtService, never())
-                .generateToken(any(UserDetails.class));
-    }
+                when(refreshTokenService.validateToken(oldRefreshToken))
+                                .thenReturn(currentToken);
 
-    @Test
-    void shouldReturnNewRefreshTokenDifferentFromOldToken() {
+                when(currentToken.getUser())
+                                .thenReturn(user);
 
-        String oldRefreshToken = "old-refresh-token";
-        String newRefreshToken = "rotated-refresh-token";
+                when(user.getEmail())
+                                .thenReturn("customer@trace.local");
 
-        RefreshTokenRequest request =
-                new RefreshTokenRequest(oldRefreshToken);
+                when(userDetailsService.loadUserByUsername(
+                                "customer@trace.local"))
+                                .thenReturn(userDetails);
 
-        when(refreshTokenService.validateToken(oldRefreshToken))
-                .thenReturn(currentToken);
+                when(jwtService.generateToken(userDetails))
+                                .thenReturn(accessToken);
 
-        when(currentToken.getUser())
-                .thenReturn(user);
+                when(refreshTokenService.createToken(user))
+                                .thenReturn(newRefreshToken);
 
-        when(user.getEmail())
-                .thenReturn("customer@trace.local");
+                when(jwtService.getExpirationMillis())
+                                .thenReturn(900000L);
 
-        when(userDetailsService.loadUserByUsername(
-                "customer@trace.local"))
-                .thenReturn(userDetails);
+                TokenRefreshResponse response = authService.refresh(request);
 
-        when(jwtService.generateToken(userDetails))
-                .thenReturn("new-access-token");
+                assertThat(response.accessToken())
+                                .isEqualTo(accessToken);
 
-        when(refreshTokenService.createToken(user))
-                .thenReturn(newRefreshToken);
+                assertThat(response.refreshToken())
+                                .isEqualTo(newRefreshToken);
 
-        when(jwtService.getExpirationMillis())
-                .thenReturn(900000L);
+                assertThat(response.tokenType())
+                                .isEqualTo("Bearer");
 
-        TokenRefreshResponse response =
-                authService.refresh(request);
+                assertThat(response.expiresIn())
+                                .isEqualTo(900000L);
 
-        assertThat(response.refreshToken())
-                .isNotEqualTo(oldRefreshToken);
+                verify(refreshTokenService)
+                                .validateToken(oldRefreshToken);
 
-        verify(currentToken)
-                .revoke();
+                verify(currentToken)
+                                .revoke();
 
-        verify(refreshTokenService)
-                .createToken(user);
-    }
+                verify(userDetailsService)
+                                .loadUserByUsername("customer@trace.local");
+
+                verify(jwtService)
+                                .generateToken(userDetails);
+
+                verify(refreshTokenService)
+                                .createToken(user);
+        }
+
+        @Test
+        void shouldNotCreateNewTokenBeforeValidatingCurrentToken() {
+
+                String refreshToken = "invalid-refresh-token";
+
+                RefreshTokenRequest request = new RefreshTokenRequest(refreshToken);
+
+                when(refreshTokenService.validateToken(refreshToken))
+                                .thenThrow(new InvalidRefreshTokenException(
+                                                "Invalid refresh token"));
+
+                org.assertj.core.api.Assertions.assertThatThrownBy(
+                                () -> authService.refresh(request))
+                                .isInstanceOf(InvalidRefreshTokenException.class)
+                                .hasMessage("Invalid refresh token");
+
+                verify(refreshTokenService)
+                                .validateToken(refreshToken);
+
+                verify(refreshTokenService, never())
+                                .createToken(any(User.class));
+
+                verify(currentToken, never())
+                                .revoke();
+
+                verify(jwtService, never())
+                                .generateToken(any(UserDetails.class));
+        }
+
+        @Test
+        void shouldReturnNewRefreshTokenDifferentFromOldToken() {
+
+                String oldRefreshToken = "old-refresh-token";
+                String newRefreshToken = "rotated-refresh-token";
+
+                RefreshTokenRequest request = new RefreshTokenRequest(oldRefreshToken);
+
+                when(refreshTokenService.validateToken(oldRefreshToken))
+                                .thenReturn(currentToken);
+
+                when(currentToken.getUser())
+                                .thenReturn(user);
+
+                when(user.getEmail())
+                                .thenReturn("customer@trace.local");
+
+                when(userDetailsService.loadUserByUsername(
+                                "customer@trace.local"))
+                                .thenReturn(userDetails);
+
+                when(jwtService.generateToken(userDetails))
+                                .thenReturn("new-access-token");
+
+                when(refreshTokenService.createToken(user))
+                                .thenReturn(newRefreshToken);
+
+                when(jwtService.getExpirationMillis())
+                                .thenReturn(900000L);
+
+                TokenRefreshResponse response = authService.refresh(request);
+
+                assertThat(response.refreshToken())
+                                .isNotEqualTo(oldRefreshToken);
+
+                verify(currentToken)
+                                .revoke();
+
+                verify(refreshTokenService)
+                                .createToken(user);
+        }
 }
-

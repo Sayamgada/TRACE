@@ -281,4 +281,131 @@ class SecurityAuthorizationIntegrationTest {
                                                 .with(user("analyst@example.com").roles("FRAUD_ANALYST")))
                                 .andExpect(status().isOk());
         }
+
+        @Test
+        void auditorCanAccessAuditLogs() throws Exception {
+                mockMvc.perform(
+                                get("/api/audit-logs")
+                                                .with(user("auditor@example.com")
+                                                                .roles("AUDITOR")))
+                                .andExpect(status().isOk());
+        }
+
+        @Test
+        void administratorCanAccessAuditLogs() throws Exception {
+                mockMvc.perform(
+                                get("/api/audit-logs")
+                                                .with(user("admin@example.com")
+                                                                .roles("ADMIN")))
+                                .andExpect(status().isOk());
+        }
+
+        @Test
+        void customerCannotAccessAuditLogs() throws Exception {
+                mockMvc.perform(
+                                get("/api/audit-logs")
+                                                .with(user("customer.one@example.com")
+                                                                .roles("CUSTOMER")))
+                                .andExpect(status().isForbidden());
+        }
+
+        @Test
+        void fraudAnalystCannotAccessAuditLogs() throws Exception {
+                mockMvc.perform(
+                                get("/api/audit-logs")
+                                                .with(user("analyst@example.com")
+                                                                .roles("FRAUD_ANALYST")))
+                                .andExpect(status().isForbidden());
+        }
+
+        @Test
+        void bankEmployeeCannotAccessAuditLogs() throws Exception {
+                mockMvc.perform(
+                                get("/api/audit-logs")
+                                                .with(user("employee@example.com")
+                                                                .roles("BANK_EMPLOYEE")))
+                                .andExpect(status().isForbidden());
+        }
+
+        @Test
+        void unauthenticatedUserCannotAccessAuditLogs()
+                        throws Exception {
+
+                mockMvc.perform(
+                                get("/api/audit-logs"))
+                                .andExpect(status().isUnauthorized());
+        }
+
+        @Test
+        void cannotUpdateAuditLogs() throws Exception {
+                mockMvc.perform(
+                                org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                                                .put("/api/audit-logs/{id}", 1L)
+                                                .with(user("admin@example.com")
+                                                                .roles("ADMIN"))
+                                                .contentType("application/json")
+                                                .content("""
+                                                                {
+                                                                    "action": "USER_LOGIN"
+                                                                }
+                                                                """))
+                                .andExpect(status().is5xxServerError());
+        }
+
+        @Test
+        void cannotDeleteAuditLogs() throws Exception {
+                mockMvc.perform(
+                                org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                                                .delete("/api/audit-logs/{id}", 1L)
+                                                .with(user("admin@example.com")
+                                                                .roles("ADMIN")))
+                                .andExpect(status().is5xxServerError());
+        }
+
+        @Test
+        void auditorCanSearchAuditLogsWithFilters() throws Exception {
+                mockMvc.perform(
+                                get("/api/audit-logs")
+                                                .param("userId", customerOne.getId().toString())
+                                                .param("action", "USER_LOGIN")
+                                                .param("entityType", "User")
+                                                .param("entityId", customerOne.getId().toString())
+                                                .param("from", "2026-01-01T00:00:00Z")
+                                                .param("to", "2026-12-31T23:59:59Z")
+                                                .with(user("auditor@example.com")
+                                                                .roles("AUDITOR")))
+                                .andExpect(status().isOk());
+        }
+
+        @Test
+        void auditorCanPaginateAuditLogs() throws Exception {
+                mockMvc.perform(
+                                get("/api/audit-logs")
+                                                .param("page", "0")
+                                                .param("size", "10")
+                                                .with(user("auditor@example.com")
+                                                                .roles("AUDITOR")))
+                                .andExpect(status().isOk());
+        }
+
+        @Test
+        void auditorCanSortAuditLogs() throws Exception {
+                mockMvc.perform(
+                                get("/api/audit-logs")
+                                                .param("sort", "timestamp,desc")
+                                                .with(user("auditor@example.com")
+                                                                .roles("AUDITOR")))
+                                .andExpect(status().isOk());
+        }
+
+        @Test
+        void administratorCanSearchAuditLogsWithFilters() throws Exception {
+                mockMvc.perform(
+                                get("/api/audit-logs")
+                                                .param("action", "TRANSACTION_CREATED")
+                                                .param("entityType", "Transaction")
+                                                .with(user("admin@example.com")
+                                                                .roles("ADMIN")))
+                                .andExpect(status().isOk());
+        }
 }

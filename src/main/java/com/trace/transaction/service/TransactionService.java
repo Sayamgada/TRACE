@@ -15,6 +15,8 @@ import com.trace.audit.entity.AuditAction;
 import com.trace.audit.service.AuditLogService;
 import com.trace.common.exception.ResourceNotFoundException;
 import com.trace.fraud.service.FraudAlertService;
+import com.trace.notification.NotificationService;
+import com.trace.notification.NotificationType;
 import com.trace.risk.context.FraudEvaluationContextFactory;
 import com.trace.risk.evaluator.FraudEvaluationContext;
 import com.trace.risk.scoring.RiskDecision;
@@ -39,6 +41,7 @@ public class TransactionService {
         private final FraudEvaluationContextFactory fraudEvaluationContextFactory;
         private final FraudAlertService fraudAlertService;
         private final AuditLogService auditLogService;
+        private final NotificationService notificationService;
 
         public TransactionService(
                         TransactionRepository transactionRepository,
@@ -47,7 +50,8 @@ public class TransactionService {
                         RiskEvaluationService riskEvaluationService,
                         FraudEvaluationContextFactory fraudEvaluationContextFactory,
                         FraudAlertService fraudAlertService,
-                        AuditLogService auditLogService) {
+                        AuditLogService auditLogService,
+                        NotificationService notificationService) {
                 this.transactionRepository = transactionRepository;
                 this.accountRepository = accountRepository;
                 this.userRepository = userRepository;
@@ -55,6 +59,7 @@ public class TransactionService {
                 this.fraudEvaluationContextFactory = fraudEvaluationContextFactory;
                 this.fraudAlertService = fraudAlertService;
                 this.auditLogService = auditLogService;
+                this.notificationService = notificationService;
         }
 
         @Transactional
@@ -175,6 +180,15 @@ public class TransactionService {
                                         savedTransaction,
                                         riskResult);
 
+                        notificationService.createNotification(
+                                        user,
+                                        NotificationType.TRANSACTION_BLOCKED,
+                                        "Transaction blocked",
+                                        "Your transaction "
+                                                        + savedTransaction.getTransactionReference()
+                                                        + " was blocked due to a risk assessment.",
+                                        savedTransaction,
+                                        null);
                         return TransactionResponse.from(savedTransaction);
                 }
 
@@ -194,6 +208,15 @@ public class TransactionService {
                                         savedTransaction,
                                         riskResult);
 
+                        notificationService.createNotification(
+                                        user,
+                                        NotificationType.TRANSACTION_FLAGGED,
+                                        "Transaction flagged",
+                                        "Your transaction "
+                                                        + savedTransaction.getTransactionReference()
+                                                        + " has been flagged for review.",
+                                        savedTransaction,
+                                        null);
                         return TransactionResponse.from(savedTransaction);
                 }
 

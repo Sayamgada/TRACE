@@ -11,6 +11,7 @@ import static org.springframework.security.test.web.servlet.setup.SecurityMockMv
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
@@ -407,5 +408,86 @@ class SecurityAuthorizationIntegrationTest {
                                                 .with(user("admin@example.com")
                                                                 .roles("ADMIN")))
                                 .andExpect(status().isOk());
+        }
+
+        @Test
+        void customerCanAccessNotifications() throws Exception {
+                mockMvc.perform(
+                                get("/api/notifications")
+                                                .with(user(customerOne.getEmail())
+                                                                .roles("CUSTOMER")))
+                                .andExpect(status().isOk());
+        }
+
+        @Test
+        void unauthenticatedUserCannotAccessNotifications()
+                        throws Exception {
+
+                mockMvc.perform(
+                                get("/api/notifications"))
+                                .andExpect(status().isUnauthorized());
+        }
+
+        @Test
+        void fraudAnalystCannotAccessNotifications() throws Exception {
+                mockMvc.perform(
+                                get("/api/notifications")
+                                                .with(user("analyst@example.com")
+                                                                .roles("FRAUD_ANALYST")))
+                                .andExpect(status().isForbidden());
+        }
+
+        @Test
+        void bankEmployeeCannotAccessNotifications() throws Exception {
+                mockMvc.perform(
+                                get("/api/notifications")
+                                                .with(user("employee@example.com")
+                                                                .roles("BANK_EMPLOYEE")))
+                                .andExpect(status().isForbidden());
+        }
+
+        @Test
+        void administratorCannotAccessNotifications() throws Exception {
+                mockMvc.perform(
+                                get("/api/notifications")
+                                                .with(user("admin@example.com")
+                                                                .roles("ADMIN")))
+                                .andExpect(status().isForbidden());
+        }
+
+        @Test
+        void auditorCannotAccessNotifications() throws Exception {
+                mockMvc.perform(
+                                get("/api/notifications")
+                                                .with(user("auditor@example.com")
+                                                                .roles("AUDITOR")))
+                                .andExpect(status().isForbidden());
+        }
+
+        @Test
+        void customerCanAccessUnreadNotificationCount() throws Exception {
+                mockMvc.perform(
+                                get("/api/notifications/unread/count")
+                                                .with(user(customerOne.getEmail())
+                                                                .roles("CUSTOMER")))
+                                .andExpect(status().isOk());
+        }
+
+        @Test
+        void unauthenticatedUserCannotMarkNotificationAsRead()
+                        throws Exception {
+
+                mockMvc.perform(
+                                patch("/api/notifications/{notificationId}/read", 1L))
+                                .andExpect(status().isUnauthorized());
+        }
+
+        @Test
+        void fraudAnalystCannotMarkNotificationAsRead() throws Exception {
+                mockMvc.perform(
+                                patch("/api/notifications/{notificationId}/read", 1L)
+                                                .with(user("analyst@example.com")
+                                                                .roles("FRAUD_ANALYST")))
+                                .andExpect(status().isForbidden());
         }
 }

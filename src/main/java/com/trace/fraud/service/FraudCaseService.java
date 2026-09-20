@@ -15,6 +15,8 @@ import com.trace.fraud.alert.FraudAlertRepository;
 import com.trace.fraud.cases.FraudCase;
 import com.trace.fraud.cases.FraudCaseRepository;
 import com.trace.fraud.cases.FraudCaseStatus;
+import com.trace.notification.NotificationService;
+import com.trace.notification.NotificationType;
 import com.trace.user.entity.RoleName;
 import com.trace.user.entity.User;
 import com.trace.user.repository.UserRepository;
@@ -22,250 +24,266 @@ import com.trace.user.repository.UserRepository;
 @Service
 public class FraudCaseService {
 
-    private final FraudCaseRepository fraudCaseRepository;
-    private final FraudAlertRepository fraudAlertRepository;
-    private final UserRepository userRepository;
-    private final AuditLogService auditLogService;
+        private final FraudCaseRepository fraudCaseRepository;
+        private final FraudAlertRepository fraudAlertRepository;
+        private final UserRepository userRepository;
+        private final AuditLogService auditLogService;
+        private final NotificationService notificationService;
 
-    public FraudCaseService(
-            FraudCaseRepository fraudCaseRepository,
-            FraudAlertRepository fraudAlertRepository,
-            UserRepository userRepository,
-            AuditLogService auditLogService) {
-        this.fraudCaseRepository = fraudCaseRepository;
-        this.fraudAlertRepository = fraudAlertRepository;
-        this.userRepository = userRepository;
-        this.auditLogService = auditLogService;
-    }
-
-    @Transactional
-    public FraudCase createCase(Long alertId) {
-        FraudAlert alert = fraudAlertRepository.findById(alertId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Fraud alert not found: " + alertId));
-
-        if (fraudCaseRepository.findByFraudAlertId(alertId).isPresent()) {
-            throw new IllegalStateException(
-                    "A fraud case already exists for alert: " + alertId);
+        public FraudCaseService(
+                        FraudCaseRepository fraudCaseRepository,
+                        FraudAlertRepository fraudAlertRepository,
+                        UserRepository userRepository,
+                        AuditLogService auditLogService,
+                        NotificationService notificationService) {
+                this.fraudCaseRepository = fraudCaseRepository;
+                this.fraudAlertRepository = fraudAlertRepository;
+                this.userRepository = userRepository;
+                this.auditLogService = auditLogService;
+                this.notificationService = notificationService;
         }
 
-        FraudCase fraudCase = new FraudCase(alert, FraudCaseStatus.OPEN);
+        @Transactional
+        public FraudCase createCase(Long alertId) {
+                FraudAlert alert = fraudAlertRepository.findById(alertId)
+                                .orElseThrow(() -> new ResourceNotFoundException(
+                                                "Fraud alert not found: " + alertId));
 
-        FraudCase savedCase = fraudCaseRepository.save(fraudCase);
+                if (fraudCaseRepository.findByFraudAlertId(alertId).isPresent()) {
+                        throw new IllegalStateException(
+                                        "A fraud case already exists for alert: " + alertId);
+                }
 
-        auditLogService.record(
-                null,
-                AuditAction.FRAUD_CASE_CREATED,
-                "FraudCase",
-                savedCase.getId(),
-                null,
-                savedCase.getStatus().name(),
-                null);
+                FraudCase fraudCase = new FraudCase(alert, FraudCaseStatus.OPEN);
 
-        return savedCase;
-    }
+                FraudCase savedCase = fraudCaseRepository.save(fraudCase);
+                notificationService.createNotification(
+                                savedCase.getFraudAlert()
+                                                .getTransaction()
+                                                .getSenderAccount()
+                                                .getUser(),
+                                NotificationType.FRAUD_CASE,
+                                "Fraud investigation opened",
+                                "A fraud investigation has been opened for transaction "
+                                                + savedCase.getFraudAlert()
+                                                                .getTransaction()
+                                                                .getTransactionReference()
+                                                + ".",
+                                savedCase.getFraudAlert().getTransaction(),
+                                savedCase);
+                auditLogService.record(
+                                null,
+                                AuditAction.FRAUD_CASE_CREATED,
+                                "FraudCase",
+                                savedCase.getId(),
+                                null,
+                                savedCase.getStatus().name(),
+                                null);
 
-    @Transactional
-    public FraudCase assignCase(
-            Long caseId,
-            String analystEmail) {
-        FraudCase fraudCase = getCase(caseId);
-
-        User analyst = getAnalyst(analystEmail);
-
-        boolean fraudAnalyst = analyst.getRoles().stream()
-                .anyMatch(role -> role.getName() == RoleName.ROLE_FRAUD_ANALYST);
-
-        if (!fraudAnalyst) {
-            throw new IllegalArgumentException(
-                    "User is not a fraud analyst: " + analystEmail);
+                return savedCase;
         }
 
-        Long previousAnalystId = fraudCase.getAssignedAnalyst() == null
-                ? null
-                : fraudCase.getAssignedAnalyst().getId();
+        @Transactional
+        public FraudCase assignCase(
+                        Long caseId,
+                        String analystEmail) {
+                FraudCase fraudCase = getCase(caseId);
 
-        fraudCase.assignAnalyst(analyst);
+                User analyst = getAnalyst(analystEmail);
 
-        FraudCase savedCase = fraudCaseRepository.save(fraudCase);
+                boolean fraudAnalyst = analyst.getRoles().stream()
+                                .anyMatch(role -> role.getName() == RoleName.ROLE_FRAUD_ANALYST);
 
-        auditLogService.record(
-                analyst.getId(),
-                AuditAction.FRAUD_CASE_ASSIGNED,
-                "FraudCase",
-                savedCase.getId(),
-                previousAnalystId == null
-                        ? null
-                        : previousAnalystId.toString(),
-                analyst.getId().toString(),
-                null);
+                if (!fraudAnalyst) {
+                        throw new IllegalArgumentException(
+                                        "User is not a fraud analyst: " + analystEmail);
+                }
 
-        return savedCase;
-    }
+                Long previousAnalystId = fraudCase.getAssignedAnalyst() == null
+                                ? null
+                                : fraudCase.getAssignedAnalyst().getId();
 
-    @Transactional
-    public FraudCase startInvestigation(
-            Long caseId,
-            String analystEmail) {
-        FraudCase fraudCase = getCase(caseId);
+                fraudCase.assignAnalyst(analyst);
 
-        User analyst = getAnalyst(analystEmail);
+                FraudCase savedCase = fraudCaseRepository.save(fraudCase);
 
-        validateAssignedAnalyst(fraudCase, analyst);
+                auditLogService.record(
+                                analyst.getId(),
+                                AuditAction.FRAUD_CASE_ASSIGNED,
+                                "FraudCase",
+                                savedCase.getId(),
+                                previousAnalystId == null
+                                                ? null
+                                                : previousAnalystId.toString(),
+                                analyst.getId().toString(),
+                                null);
 
-        if (fraudCase.getStatus() != FraudCaseStatus.ASSIGNED) {
-            throw new IllegalStateException(
-                    "Case must be ASSIGNED before investigation can start");
+                return savedCase;
         }
 
-        fraudCase.setStatus(
-                FraudCaseStatus.INVESTIGATING);
+        @Transactional
+        public FraudCase startInvestigation(
+                        Long caseId,
+                        String analystEmail) {
+                FraudCase fraudCase = getCase(caseId);
 
-        return fraudCaseRepository.save(fraudCase);
-    }
+                User analyst = getAnalyst(analystEmail);
 
-    @Transactional
-    public FraudCase confirmFraud(
-            Long caseId,
-            String analystEmail) {
-        FraudCase fraudCase = getCase(caseId);
+                validateAssignedAnalyst(fraudCase, analyst);
 
-        User analyst = getAnalyst(analystEmail);
+                if (fraudCase.getStatus() != FraudCaseStatus.ASSIGNED) {
+                        throw new IllegalStateException(
+                                        "Case must be ASSIGNED before investigation can start");
+                }
 
-        validateAssignedAnalyst(fraudCase, analyst);
-        validateInvestigating(fraudCase);
+                fraudCase.setStatus(
+                                FraudCaseStatus.INVESTIGATING);
 
-        FraudCaseStatus oldStatus = fraudCase.getStatus();
-
-        fraudCase.setStatus(
-                FraudCaseStatus.CONFIRMED_FRAUD);
-
-        fraudCase.setResolvedAt(Instant.now());
-
-        FraudCase savedCase = fraudCaseRepository.save(fraudCase);
-
-        auditLogService.record(
-                analyst.getId(),
-                AuditAction.FRAUD_CASE_RESOLVED,
-                "FraudCase",
-                savedCase.getId(),
-                oldStatus.name(),
-                savedCase.getStatus().name(),
-                null);
-
-        return savedCase;
-    }
-
-    @Transactional
-    public FraudCase markFalsePositive(
-            Long caseId,
-            String analystEmail) {
-        FraudCase fraudCase = getCase(caseId);
-
-        User analyst = getAnalyst(analystEmail);
-
-        validateAssignedAnalyst(fraudCase, analyst);
-        validateInvestigating(fraudCase);
-
-        FraudCaseStatus oldStatus = fraudCase.getStatus();
-
-        fraudCase.setStatus(
-                FraudCaseStatus.FALSE_POSITIVE);
-
-        fraudCase.setResolvedAt(Instant.now());
-
-        FraudCase savedCase = fraudCaseRepository.save(fraudCase);
-
-        auditLogService.record(
-                analyst.getId(),
-                AuditAction.FRAUD_CASE_RESOLVED,
-                "FraudCase",
-                savedCase.getId(),
-                oldStatus.name(),
-                savedCase.getStatus().name(),
-                null);
-
-        return savedCase;
-    }
-
-    @Transactional
-    public FraudCase closeCase(
-            Long caseId,
-            String analystEmail) {
-        FraudCase fraudCase = getCase(caseId);
-
-        User analyst = getAnalyst(analystEmail);
-
-        validateAssignedAnalyst(fraudCase, analyst);
-
-        if (fraudCase.getStatus() != FraudCaseStatus.CONFIRMED_FRAUD
-                && fraudCase.getStatus() != FraudCaseStatus.FALSE_POSITIVE) {
-
-            throw new IllegalStateException(
-                    "Case must be resolved before it can be closed");
+                return fraudCaseRepository.save(fraudCase);
         }
 
-        fraudCase.setStatus(FraudCaseStatus.CLOSED);
+        @Transactional
+        public FraudCase confirmFraud(
+                        Long caseId,
+                        String analystEmail) {
+                FraudCase fraudCase = getCase(caseId);
 
-        return fraudCaseRepository.save(fraudCase);
-    }
+                User analyst = getAnalyst(analystEmail);
 
-    @Transactional(readOnly = true)
-    public FraudCase getCase(Long caseId) {
-        return fraudCaseRepository.findById(caseId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Fraud case not found: " + caseId));
-    }
+                validateAssignedAnalyst(fraudCase, analyst);
+                validateInvestigating(fraudCase);
 
-    @Transactional(readOnly = true)
-    public Page<FraudCase> getCases(
-            FraudCaseStatus status,
-            Pageable pageable) {
-        if (status != null) {
-            return fraudCaseRepository.findByStatus(
-                    status,
-                    pageable);
+                FraudCaseStatus oldStatus = fraudCase.getStatus();
+
+                fraudCase.setStatus(
+                                FraudCaseStatus.CONFIRMED_FRAUD);
+
+                fraudCase.setResolvedAt(Instant.now());
+
+                FraudCase savedCase = fraudCaseRepository.save(fraudCase);
+
+                auditLogService.record(
+                                analyst.getId(),
+                                AuditAction.FRAUD_CASE_RESOLVED,
+                                "FraudCase",
+                                savedCase.getId(),
+                                oldStatus.name(),
+                                savedCase.getStatus().name(),
+                                null);
+
+                return savedCase;
         }
 
-        return fraudCaseRepository.findAll(pageable);
-    }
+        @Transactional
+        public FraudCase markFalsePositive(
+                        Long caseId,
+                        String analystEmail) {
+                FraudCase fraudCase = getCase(caseId);
 
-    @Transactional(readOnly = true)
-    public Page<FraudCase> getCasesAssignedToAnalyst(
-            String analystEmail,
-            Pageable pageable) {
-        User analyst = getAnalyst(analystEmail);
+                User analyst = getAnalyst(analystEmail);
 
-        return fraudCaseRepository.findByAssignedAnalystId(
-                analyst.getId(),
-                pageable);
-    }
+                validateAssignedAnalyst(fraudCase, analyst);
+                validateInvestigating(fraudCase);
 
-    private User getAnalyst(String analystEmail) {
-        return userRepository.findByEmailIgnoreCase(analystEmail)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "User not found: " + analystEmail));
-    }
+                FraudCaseStatus oldStatus = fraudCase.getStatus();
 
-    private void validateAssignedAnalyst(
-            FraudCase fraudCase,
-            User analyst) {
-        if (fraudCase.getAssignedAnalyst() == null
-                || !fraudCase.getAssignedAnalyst()
-                        .getId()
-                        .equals(analyst.getId())) {
+                fraudCase.setStatus(
+                                FraudCaseStatus.FALSE_POSITIVE);
 
-            throw new IllegalStateException(
-                    "Fraud case is not assigned to the authenticated analyst");
+                fraudCase.setResolvedAt(Instant.now());
+
+                FraudCase savedCase = fraudCaseRepository.save(fraudCase);
+
+                auditLogService.record(
+                                analyst.getId(),
+                                AuditAction.FRAUD_CASE_RESOLVED,
+                                "FraudCase",
+                                savedCase.getId(),
+                                oldStatus.name(),
+                                savedCase.getStatus().name(),
+                                null);
+
+                return savedCase;
         }
-    }
 
-    private void validateInvestigating(
-            FraudCase fraudCase) {
-        if (fraudCase.getStatus() != FraudCaseStatus.INVESTIGATING) {
+        @Transactional
+        public FraudCase closeCase(
+                        Long caseId,
+                        String analystEmail) {
+                FraudCase fraudCase = getCase(caseId);
 
-            throw new IllegalStateException(
-                    "Case must be under investigation");
+                User analyst = getAnalyst(analystEmail);
+
+                validateAssignedAnalyst(fraudCase, analyst);
+
+                if (fraudCase.getStatus() != FraudCaseStatus.CONFIRMED_FRAUD
+                                && fraudCase.getStatus() != FraudCaseStatus.FALSE_POSITIVE) {
+
+                        throw new IllegalStateException(
+                                        "Case must be resolved before it can be closed");
+                }
+
+                fraudCase.setStatus(FraudCaseStatus.CLOSED);
+
+                return fraudCaseRepository.save(fraudCase);
         }
-    }
+
+        @Transactional(readOnly = true)
+        public FraudCase getCase(Long caseId) {
+                return fraudCaseRepository.findById(caseId)
+                                .orElseThrow(() -> new ResourceNotFoundException(
+                                                "Fraud case not found: " + caseId));
+        }
+
+        @Transactional(readOnly = true)
+        public Page<FraudCase> getCases(
+                        FraudCaseStatus status,
+                        Pageable pageable) {
+                if (status != null) {
+                        return fraudCaseRepository.findByStatus(
+                                        status,
+                                        pageable);
+                }
+
+                return fraudCaseRepository.findAll(pageable);
+        }
+
+        @Transactional(readOnly = true)
+        public Page<FraudCase> getCasesAssignedToAnalyst(
+                        String analystEmail,
+                        Pageable pageable) {
+                User analyst = getAnalyst(analystEmail);
+
+                return fraudCaseRepository.findByAssignedAnalystId(
+                                analyst.getId(),
+                                pageable);
+        }
+
+        private User getAnalyst(String analystEmail) {
+                return userRepository.findByEmailIgnoreCase(analystEmail)
+                                .orElseThrow(() -> new ResourceNotFoundException(
+                                                "User not found: " + analystEmail));
+        }
+
+        private void validateAssignedAnalyst(
+                        FraudCase fraudCase,
+                        User analyst) {
+                if (fraudCase.getAssignedAnalyst() == null
+                                || !fraudCase.getAssignedAnalyst()
+                                                .getId()
+                                                .equals(analyst.getId())) {
+
+                        throw new IllegalStateException(
+                                        "Fraud case is not assigned to the authenticated analyst");
+                }
+        }
+
+        private void validateInvestigating(
+                        FraudCase fraudCase) {
+                if (fraudCase.getStatus() != FraudCaseStatus.INVESTIGATING) {
+
+                        throw new IllegalStateException(
+                                        "Case must be under investigation");
+                }
+        }
 }

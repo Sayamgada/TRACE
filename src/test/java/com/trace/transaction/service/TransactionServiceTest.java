@@ -28,6 +28,7 @@ import com.trace.account.repository.AccountRepository;
 import com.trace.audit.entity.AuditAction;
 import com.trace.audit.service.AuditLogService;
 import com.trace.fraud.service.FraudAlertService;
+import com.trace.notification.NotificationService;
 import com.trace.risk.context.FraudEvaluationContextFactory;
 import com.trace.risk.evaluator.FraudEvaluationContext;
 import com.trace.risk.scoring.RiskDecision;
@@ -74,6 +75,9 @@ class TransactionServiceTest {
 
         @InjectMocks
         private TransactionService transactionService;
+
+        @Mock
+private NotificationService notificationService;
 
         private User user;
         private Account sender;

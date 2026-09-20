@@ -6,12 +6,15 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.MediaType;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
@@ -20,6 +23,9 @@ import com.trace.account.entity.Account;
 import com.trace.account.entity.AccountStatus;
 import com.trace.account.entity.Currency;
 import com.trace.account.repository.AccountRepository;
+import com.trace.risk.rule.FraudRule;
+import com.trace.risk.rule.FraudRuleRepository;
+import com.trace.risk.rule.FraudRuleType;
 import com.trace.transaction.entity.Transaction;
 import com.trace.transaction.entity.TransactionStatus;
 import com.trace.transaction.entity.TransactionType;
@@ -53,12 +59,16 @@ class SecurityAuthorizationIntegrationTest {
         private AccountRepository accountRepository;
 
         @Autowired
+        private FraudRuleRepository fraudRuleRepository;
+
+        @Autowired
         private TransactionRepository transactionRepository;
 
         private MockMvc mockMvc;
 
         private User customerOne;
         private User customerTwo;
+        private User admin;
 
         private Account accountOne;
         private Account accountTwo;
@@ -72,6 +82,7 @@ class SecurityAuthorizationIntegrationTest {
                                 .build();
 
                 transactionRepository.deleteAll();
+                fraudRuleRepository.deleteAll();
                 accountRepository.deleteAll();
                 userRepository.deleteAll();
 
@@ -79,6 +90,11 @@ class SecurityAuthorizationIntegrationTest {
                                 .findByName(RoleName.ROLE_CUSTOMER)
                                 .orElseGet(() -> roleRepository.save(
                                                 new Role(RoleName.ROLE_CUSTOMER)));
+
+                Role adminRole = roleRepository
+                                .findByName(RoleName.ROLE_ADMIN)
+                                .orElseGet(() -> roleRepository.save(
+                                                new Role(RoleName.ROLE_ADMIN)));
 
                 customerOne = new User(
                                 "Customer One",
@@ -96,8 +112,17 @@ class SecurityAuthorizationIntegrationTest {
 
                 customerTwo.addRole(customerRole);
 
+                admin = new User(
+                                "Administrator",
+                                "admin@example.com",
+                                "hashed-password",
+                                UserStatus.ACTIVE);
+
+                admin.addRole(adminRole);
+
                 customerOne = userRepository.save(customerOne);
                 customerTwo = userRepository.save(customerTwo);
+                admin = userRepository.save(admin);
 
                 accountOne = accountRepository.save(
                                 new Account(
@@ -173,7 +198,7 @@ class SecurityAuthorizationIntegrationTest {
                                                                 accountTwo.getId())
                                                 .with(user(customerOne.getEmail())
                                                                 .roles("CUSTOMER"))
-                                                .contentType("application/json")
+                                                .contentType(MediaType.APPLICATION_JSON)
                                                 .content("""
                                                                 {
                                                                     "amount": 100.00
@@ -256,7 +281,8 @@ class SecurityAuthorizationIntegrationTest {
         void customerCannotAccessFraudCases() throws Exception {
                 mockMvc.perform(
                                 get("/api/fraud/cases")
-                                                .with(user("customer@example.com").roles("CUSTOMER")))
+                                                .with(user("customer@example.com")
+                                                                .roles("CUSTOMER")))
                                 .andExpect(status().isForbidden());
         }
 
@@ -264,7 +290,8 @@ class SecurityAuthorizationIntegrationTest {
         void bankEmployeeCannotAccessFraudCases() throws Exception {
                 mockMvc.perform(
                                 get("/api/fraud/cases")
-                                                .with(user("employee@example.com").roles("BANK_EMPLOYEE")))
+                                                .with(user("employee@example.com")
+                                                                .roles("BANK_EMPLOYEE")))
                                 .andExpect(status().isForbidden());
         }
 
@@ -272,7 +299,8 @@ class SecurityAuthorizationIntegrationTest {
         void adminCannotAccessFraudCases() throws Exception {
                 mockMvc.perform(
                                 get("/api/fraud/cases")
-                                                .with(user("admin@example.com").roles("ADMIN")))
+                                                .with(user("admin@example.com")
+                                                                .roles("ADMIN")))
                                 .andExpect(status().isForbidden());
         }
 
@@ -280,7 +308,8 @@ class SecurityAuthorizationIntegrationTest {
         void auditorCannotAccessFraudCases() throws Exception {
                 mockMvc.perform(
                                 get("/api/fraud/cases")
-                                                .with(user("auditor@example.com").roles("AUDITOR")))
+                                                .with(user("auditor@example.com")
+                                                                .roles("AUDITOR")))
                                 .andExpect(status().isForbidden());
         }
 
@@ -288,7 +317,8 @@ class SecurityAuthorizationIntegrationTest {
         void fraudAnalystCanAccessFraudCases() throws Exception {
                 mockMvc.perform(
                                 get("/api/fraud/cases")
-                                                .with(user("analyst@example.com").roles("FRAUD_ANALYST")))
+                                                .with(user("analyst@example.com")
+                                                                .roles("FRAUD_ANALYST")))
                                 .andExpect(status().isOk());
         }
 
@@ -353,7 +383,7 @@ class SecurityAuthorizationIntegrationTest {
                                                 .put("/api/audit-logs/{id}", 1L)
                                                 .with(user("admin@example.com")
                                                                 .roles("ADMIN"))
-                                                .contentType("application/json")
+                                                .contentType(MediaType.APPLICATION_JSON)
                                                 .content("""
                                                                 {
                                                                     "action": "USER_LOGIN"
@@ -417,6 +447,227 @@ class SecurityAuthorizationIntegrationTest {
                                                 .with(user("admin@example.com")
                                                                 .roles("ADMIN")))
                                 .andExpect(status().isOk());
+        }
+
+        @Test
+        void adminCanUpdateFraudRule() throws Exception {
+
+                FraudRule fraudRule = fraudRuleRepository.save(
+                                new FraudRule(
+                                                "High Amount Rule",
+                                                FraudRuleType.HIGH_AMOUNT,
+                                                new BigDecimal("10000.00"),
+                                                new BigDecimal("50.00"),
+                                                true));
+
+                mockMvc.perform(
+                                put("/api/fraud/rules/{ruleId}", fraudRule.getId())
+                                                .with(user(admin.getEmail())
+                                                                .roles("ADMIN"))
+                                                .contentType(MediaType.APPLICATION_JSON)
+                                                .content("""
+                                                                {
+                                                                  "ruleName": "Updated High Amount Rule",
+                                                                  "ruleType": "HIGH_AMOUNT",
+                                                                  "threshold": 15000.00,
+                                                                  "weight": 60.00,
+                                                                  "active": true
+                                                                }
+                                                                """))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.id")
+                                                .value(fraudRule.getId()))
+                                .andExpect(jsonPath("$.ruleName")
+                                                .value("Updated High Amount Rule"))
+                                .andExpect(jsonPath("$.ruleType")
+                                                .value("HIGH_AMOUNT"))
+                                .andExpect(jsonPath("$.threshold")
+                                                .value(15000.00))
+                                .andExpect(jsonPath("$.weight")
+                                                .value(60.00))
+                                .andExpect(jsonPath("$.active")
+                                                .value(true));
+        }
+
+        @Test
+        void customerCannotUpdateFraudRule() throws Exception {
+
+                FraudRule fraudRule = fraudRuleRepository.save(
+                                new FraudRule(
+                                                "Customer Rule",
+                                                FraudRuleType.HIGH_AMOUNT,
+                                                new BigDecimal("10000.00"),
+                                                new BigDecimal("50.00"),
+                                                true));
+
+                mockMvc.perform(
+                                put("/api/fraud/rules/{ruleId}", fraudRule.getId())
+                                                .with(user(customerOne.getEmail())
+                                                                .roles("CUSTOMER"))
+                                                .contentType(MediaType.APPLICATION_JSON)
+                                                .content("""
+                                                                {
+                                                                  "ruleName": "Updated Rule",
+                                                                  "ruleType": "HIGH_AMOUNT",
+                                                                  "threshold": 15000.00,
+                                                                  "weight": 60.00,
+                                                                  "active": true
+                                                                }
+                                                                """))
+                                .andExpect(status().isForbidden());
+        }
+
+        @Test
+        void fraudAnalystCannotUpdateFraudRule() throws Exception {
+
+                FraudRule fraudRule = fraudRuleRepository.save(
+                                new FraudRule(
+                                                "Analyst Rule",
+                                                FraudRuleType.HIGH_AMOUNT,
+                                                new BigDecimal("10000.00"),
+                                                new BigDecimal("50.00"),
+                                                true));
+
+                mockMvc.perform(
+                                put("/api/fraud/rules/{ruleId}", fraudRule.getId())
+                                                .with(user("analyst@example.com")
+                                                                .roles("FRAUD_ANALYST"))
+                                                .contentType(MediaType.APPLICATION_JSON)
+                                                .content("""
+                                                                {
+                                                                  "ruleName": "Updated Rule",
+                                                                  "ruleType": "HIGH_AMOUNT",
+                                                                  "threshold": 15000.00,
+                                                                  "weight": 60.00,
+                                                                  "active": true
+                                                                }
+                                                                """))
+                                .andExpect(status().isForbidden());
+        }
+
+        @Test
+        void bankEmployeeCannotUpdateFraudRule() throws Exception {
+
+                FraudRule fraudRule = fraudRuleRepository.save(
+                                new FraudRule(
+                                                "Employee Rule",
+                                                FraudRuleType.HIGH_AMOUNT,
+                                                new BigDecimal("10000.00"),
+                                                new BigDecimal("50.00"),
+                                                true));
+
+                mockMvc.perform(
+                                put("/api/fraud/rules/{ruleId}", fraudRule.getId())
+                                                .with(user("employee@example.com")
+                                                                .roles("BANK_EMPLOYEE"))
+                                                .contentType(MediaType.APPLICATION_JSON)
+                                                .content("""
+                                                                {
+                                                                  "ruleName": "Updated Rule",
+                                                                  "ruleType": "HIGH_AMOUNT",
+                                                                  "threshold": 15000.00,
+                                                                  "weight": 60.00,
+                                                                  "active": true
+                                                                }
+                                                                """))
+                                .andExpect(status().isForbidden());
+        }
+
+        @Test
+        void auditorCannotUpdateFraudRule() throws Exception {
+
+                FraudRule fraudRule = fraudRuleRepository.save(
+                                new FraudRule(
+                                                "Auditor Rule",
+                                                FraudRuleType.HIGH_AMOUNT,
+                                                new BigDecimal("10000.00"),
+                                                new BigDecimal("50.00"),
+                                                true));
+
+                mockMvc.perform(
+                                put("/api/fraud/rules/{ruleId}", fraudRule.getId())
+                                                .with(user("auditor@example.com")
+                                                                .roles("AUDITOR"))
+                                                .contentType(MediaType.APPLICATION_JSON)
+                                                .content("""
+                                                                {
+                                                                  "ruleName": "Updated Rule",
+                                                                  "ruleType": "HIGH_AMOUNT",
+                                                                  "threshold": 15000.00,
+                                                                  "weight": 60.00,
+                                                                  "active": true
+                                                                }
+                                                                """))
+                                .andExpect(status().isForbidden());
+        }
+
+        @Test
+        void unauthenticatedUserCannotUpdateFraudRule()
+                        throws Exception {
+
+                mockMvc.perform(
+                                put("/api/fraud/rules/{ruleId}", 999999L)
+                                                .contentType(MediaType.APPLICATION_JSON)
+                                                .content("""
+                                                                {
+                                                                  "ruleName": "Updated Rule",
+                                                                  "ruleType": "HIGH_AMOUNT",
+                                                                  "threshold": 15000.00,
+                                                                  "weight": 60.00,
+                                                                  "active": true
+                                                                }
+                                                                """))
+                                .andExpect(status().isUnauthorized());
+        }
+
+        @Test
+        void adminCannotUpdateNonexistentFraudRule()
+                        throws Exception {
+
+                mockMvc.perform(
+                                put("/api/fraud/rules/{ruleId}", 999999L)
+                                                .with(user(admin.getEmail())
+                                                                .roles("ADMIN"))
+                                                .contentType(MediaType.APPLICATION_JSON)
+                                                .content("""
+                                                                {
+                                                                  "ruleName": "Updated Rule",
+                                                                  "ruleType": "HIGH_AMOUNT",
+                                                                  "threshold": 15000.00,
+                                                                  "weight": 60.00,
+                                                                  "active": true
+                                                                }
+                                                                """))
+                                .andExpect(status().isNotFound());
+        }
+
+        @Test
+        void adminCannotUpdateFraudRuleWithInvalidRequest()
+                        throws Exception {
+
+                FraudRule fraudRule = fraudRuleRepository.save(
+                                new FraudRule(
+                                                "Validation Rule",
+                                                FraudRuleType.HIGH_AMOUNT,
+                                                new BigDecimal("10000.00"),
+                                                new BigDecimal("50.00"),
+                                                true));
+
+                mockMvc.perform(
+                                put("/api/fraud/rules/{ruleId}", fraudRule.getId())
+                                                .with(user(admin.getEmail())
+                                                                .roles("ADMIN"))
+                                                .contentType(MediaType.APPLICATION_JSON)
+                                                .content("""
+                                                                {
+                                                                  "ruleName": "",
+                                                                  "ruleType": "HIGH_AMOUNT",
+                                                                  "threshold": -1.00,
+                                                                  "weight": -5.00,
+                                                                  "active": true
+                                                                }
+                                                                """))
+                                .andExpect(status().isBadRequest());
         }
 
         @Test
@@ -648,5 +899,4 @@ class SecurityAuthorizationIntegrationTest {
                                                                 .roles("CUSTOMER")))
                                 .andExpect(status().isOk());
         }
-
 }

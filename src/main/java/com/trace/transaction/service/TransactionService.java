@@ -2,8 +2,11 @@ package com.trace.transaction.service;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -52,6 +55,7 @@ public class TransactionService {
                         FraudAlertService fraudAlertService,
                         AuditLogService auditLogService,
                         NotificationService notificationService) {
+
                 this.transactionRepository = transactionRepository;
                 this.accountRepository = accountRepository;
                 this.userRepository = userRepository;
@@ -66,6 +70,7 @@ public class TransactionService {
         public TransactionResponse createTransfer(
                         CreateTransferRequest request,
                         Authentication authentication) {
+
                 User user = getAuthenticatedUser(authentication);
 
                 Account senderAccount;
@@ -125,8 +130,8 @@ public class TransactionService {
                                 BigDecimal.ZERO.setScale(2));
 
                 /*
-                 * Persist the transaction before risk evaluation so that
-                 * the transaction has a durable identity for audit purposes.
+                 * Persist the transaction before risk evaluation so that the
+                 * transaction has a durable identity for audit purposes.
                  */
                 transactionRepository.save(transaction);
 
@@ -189,6 +194,7 @@ public class TransactionService {
                                                         + " was blocked due to a risk assessment.",
                                         savedTransaction,
                                         null);
+
                         return TransactionResponse.from(savedTransaction);
                 }
 
@@ -217,6 +223,7 @@ public class TransactionService {
                                                         + " has been flagged for review.",
                                         savedTransaction,
                                         null);
+
                         return TransactionResponse.from(savedTransaction);
                 }
 
@@ -239,9 +246,61 @@ public class TransactionService {
                                 transactionRepository.save(transaction));
         }
 
+
+        @Transactional(readOnly = true)
+        public Page<TransactionResponse> getMyTransactions(
+                        Authentication authentication,
+                        Pageable pageable) {
+
+                User user = getAuthenticatedUser(authentication);
+
+                List<Long> accountIds = accountRepository
+                                .findByUserId(user.getId())
+                                .stream()
+                                .map(Account::getId)
+                                .toList();
+
+                if (accountIds.isEmpty()) {
+                        return Page.empty(pageable);
+                }
+
+                return transactionRepository
+                                .findBySenderAccountIdInOrReceiverAccountIdIn(
+                                                accountIds,
+                                                accountIds,
+                                                pageable)
+                                .map(TransactionResponse::from);
+        }
+
+        @Transactional(readOnly = true)
+        public TransactionResponse getMyTransaction(
+                        Long transactionId,
+                        Authentication authentication) {
+
+                User user = getAuthenticatedUser(authentication);
+
+                Transaction transaction = transactionRepository
+                                .findById(transactionId)
+                                .orElseThrow(() -> new ResourceNotFoundException(
+                                                "Transaction not found: " + transactionId));
+
+                boolean senderOwnedByUser = transaction.getSenderAccount()
+                                .getUser()
+                                .getId()
+                                .equals(user.getId());
+
+                if (!senderOwnedByUser) {
+                        throw new ResourceNotFoundException(
+                                        "Transaction not found: " + transactionId);
+                }
+
+                return TransactionResponse.from(transaction);
+        }
+
         private void validateSenderOwnership(
                         Account senderAccount,
                         User user) {
+
                 if (!senderAccount.getUser().getId().equals(user.getId())) {
                         throw new ResourceNotFoundException(
                                         "Sender account not found: "
@@ -253,6 +312,7 @@ public class TransactionService {
                         Account senderAccount,
                         Account receiverAccount,
                         BigDecimal amount) {
+
                 if (senderAccount.getId().equals(receiverAccount.getId())) {
                         throw new IllegalArgumentException(
                                         "Sender and receiver accounts must be different");
@@ -270,6 +330,7 @@ public class TransactionService {
 
                 if (!senderAccount.getCurrency()
                                 .equals(receiverAccount.getCurrency())) {
+
                         throw new IllegalArgumentException(
                                         "Sender and receiver currencies must match");
                 }
@@ -294,6 +355,7 @@ public class TransactionService {
                         Account senderAccount,
                         Account receiverAccount,
                         BigDecimal amount) {
+
                 senderAccount.setBalance(
                                 senderAccount.getBalance().subtract(amount));
 
@@ -306,23 +368,27 @@ public class TransactionService {
 
         private User getAuthenticatedUser(
                         Authentication authentication) {
+
                 if (authentication == null
                                 || !authentication.isAuthenticated()) {
+
                         throw new IllegalStateException(
                                         "Authentication is required");
                 }
 
                 return userRepository.findByEmailIgnoreCase(
-                                authentication.getName()).orElseThrow(
-                                                () -> new ResourceNotFoundException(
-                                                                "Authenticated user was not found"));
+                                authentication.getName())
+                                .orElseThrow(() -> new ResourceNotFoundException(
+                                                "Authenticated user was not found"));
         }
 
         private String generateTransactionReference() {
-                return "TXN-" + UUID.randomUUID()
-                                .toString()
-                                .replace("-", "")
-                                .substring(0, 20)
-                                .toUpperCase();
+
+                return "TXN-"
+                                + UUID.randomUUID()
+                                                .toString()
+                                                .replace("-", "")
+                                                .substring(0, 20)
+                                                .toUpperCase();
         }
 }

@@ -12,40 +12,38 @@ import com.trace.transaction.entity.Transaction;
 import com.trace.transaction.entity.TransactionStatus;
 
 public interface TransactionRepository
-        extends JpaRepository<Transaction, Long> {
+                extends JpaRepository<Transaction, Long> {
 
-    Optional<Transaction> findByTransactionReference(
-            String transactionReference
-    );
+        Optional<Transaction> findByTransactionReference(
+                        String transactionReference);
 
-    boolean existsByTransactionReference(
-            String transactionReference
-    );
+        boolean existsByTransactionReference(
+                        String transactionReference);
 
-    Page<Transaction> findBySenderAccountId(
-            Long accountId,
-            Pageable pageable
-    );
+        Page<Transaction> findBySenderAccountId(
+                        Long accountId,
+                        Pageable pageable);
 
-    Page<Transaction> findByReceiverAccountId(
-            Long accountId,
-            Pageable pageable
-    );
+        Page<Transaction> findByReceiverAccountId(
+                        Long accountId,
+                        Pageable pageable);
 
-    List<Transaction> findByStatus(
-            TransactionStatus status
-    );
+        Page<Transaction> findBySenderAccountIdInOrReceiverAccountIdIn(
+                        List<Long> senderAccountIds,
+                        List<Long> receiverAccountIds,
+                        Pageable pageable);
 
-    List<Transaction> findBySenderAccountIdAndCreatedAtBetween(
-            Long accountId,
-            Instant start,
-            Instant end
-    );
+        List<Transaction> findByStatus(
+                        TransactionStatus status);
 
-    List<Transaction> findBySenderAccountIdAndIdNotAndCreatedAtBetween(
-            Long accountId,
-            Long transactionId,
-            Instant start,
-            Instant end
-    );
+        List<Transaction> findBySenderAccountIdAndCreatedAtBetween(
+                        Long accountId,
+                        Instant start,
+                        Instant end);
+
+        List<Transaction> findBySenderAccountIdAndIdNotAndCreatedAtBetween(
+                        Long accountId,
+                        Long transactionId,
+                        Instant start,
+                        Instant end);
 }

@@ -20,6 +20,10 @@ import com.trace.account.entity.Account;
 import com.trace.account.entity.AccountStatus;
 import com.trace.account.entity.Currency;
 import com.trace.account.repository.AccountRepository;
+import com.trace.transaction.entity.Transaction;
+import com.trace.transaction.entity.TransactionStatus;
+import com.trace.transaction.entity.TransactionType;
+import com.trace.transaction.repository.TransactionRepository;
 import com.trace.user.entity.Role;
 import com.trace.user.entity.RoleName;
 import com.trace.user.entity.User;
@@ -48,6 +52,9 @@ class SecurityAuthorizationIntegrationTest {
         @Autowired
         private AccountRepository accountRepository;
 
+        @Autowired
+        private TransactionRepository transactionRepository;
+
         private MockMvc mockMvc;
 
         private User customerOne;
@@ -58,11 +65,13 @@ class SecurityAuthorizationIntegrationTest {
 
         @BeforeEach
         void setUp() {
+
                 mockMvc = MockMvcBuilders
                                 .webAppContextSetup(context)
                                 .apply(springSecurity(springSecurityFilterChain))
                                 .build();
 
+                transactionRepository.deleteAll();
                 accountRepository.deleteAll();
                 userRepository.deleteAll();
 
@@ -490,4 +499,154 @@ class SecurityAuthorizationIntegrationTest {
                                                                 .roles("FRAUD_ANALYST")))
                                 .andExpect(status().isForbidden());
         }
+
+        @Test
+        void customerCanAccessOwnTransactions() throws Exception {
+                mockMvc.perform(
+                                get("/api/transactions")
+                                                .with(user(customerOne.getEmail())
+                                                                .roles("CUSTOMER")))
+                                .andExpect(status().isOk());
+        }
+
+        @Test
+        void customerCanAccessOwnTransactionHistory() throws Exception {
+                mockMvc.perform(
+                                get("/api/transactions/history")
+                                                .with(user(customerOne.getEmail())
+                                                                .roles("CUSTOMER")))
+                                .andExpect(status().isOk());
+        }
+
+        @Test
+        void unauthenticatedUserCannotAccessTransactions() throws Exception {
+                mockMvc.perform(
+                                get("/api/transactions"))
+                                .andExpect(status().isUnauthorized());
+        }
+
+        @Test
+        void unauthenticatedUserCannotAccessTransactionHistory()
+                        throws Exception {
+
+                mockMvc.perform(
+                                get("/api/transactions/history"))
+                                .andExpect(status().isUnauthorized());
+        }
+
+        @Test
+        void fraudAnalystCannotAccessCustomerTransactions() throws Exception {
+                mockMvc.perform(
+                                get("/api/transactions")
+                                                .with(user("analyst@example.com")
+                                                                .roles("FRAUD_ANALYST")))
+                                .andExpect(status().isForbidden());
+        }
+
+        @Test
+        void bankEmployeeCannotAccessCustomerTransactions() throws Exception {
+                mockMvc.perform(
+                                get("/api/transactions")
+                                                .with(user("employee@example.com")
+                                                                .roles("BANK_EMPLOYEE")))
+                                .andExpect(status().isForbidden());
+        }
+
+        @Test
+        void administratorCannotAccessCustomerTransactions() throws Exception {
+                mockMvc.perform(
+                                get("/api/transactions")
+                                                .with(user("admin@example.com")
+                                                                .roles("ADMIN")))
+                                .andExpect(status().isForbidden());
+        }
+
+        @Test
+        void auditorCannotAccessCustomerTransactions() throws Exception {
+                mockMvc.perform(
+                                get("/api/transactions")
+                                                .with(user("auditor@example.com")
+                                                                .roles("AUDITOR")))
+                                .andExpect(status().isForbidden());
+        }
+
+        @Test
+        void customerCanAccessOwnTransaction() throws Exception {
+
+                Transaction transaction = transactionRepository.save(
+                                new Transaction(
+                                                "TXN-OWN-001",
+                                                accountOne,
+                                                accountTwo,
+                                                new BigDecimal("100.00"),
+                                                "INR",
+                                                TransactionType.TRANSFER,
+                                                TransactionStatus.APPROVED,
+                                                new BigDecimal("5.00")));
+
+                mockMvc.perform(
+                                get("/api/transactions/{transactionId}",
+                                                transaction.getId())
+                                                .with(user(customerOne.getEmail())
+                                                                .roles("CUSTOMER")))
+                                .andExpect(status().isOk());
+        }
+
+        @Test
+        void customerCannotAccessAnotherCustomersTransaction()
+                        throws Exception {
+
+                Transaction transaction = transactionRepository.save(
+                                new Transaction(
+                                                "TXN-OWN-002",
+                                                accountTwo,
+                                                accountOne,
+                                                new BigDecimal("100.00"),
+                                                "INR",
+                                                TransactionType.TRANSFER,
+                                                TransactionStatus.APPROVED,
+                                                new BigDecimal("5.00")));
+
+                mockMvc.perform(
+                                get("/api/transactions/{transactionId}",
+                                                transaction.getId())
+                                                .with(user(customerOne.getEmail())
+                                                                .roles("CUSTOMER")))
+                                .andExpect(status().isNotFound());
+        }
+
+        @Test
+        void unauthenticatedUserCannotAccessTransaction()
+                        throws Exception {
+
+                mockMvc.perform(
+                                get("/api/transactions/{transactionId}", 999999L))
+                                .andExpect(status().isUnauthorized());
+        }
+
+        @Test
+        void customerCanPaginateTransactions() throws Exception {
+
+                mockMvc.perform(
+                                get("/api/transactions")
+                                                .param("page", "0")
+                                                .param("size", "10")
+                                                .with(user(customerOne.getEmail())
+                                                                .roles("CUSTOMER")))
+                                .andExpect(status().isOk());
+        }
+
+        @Test
+        void customerCanPaginateTransactionHistory()
+                        throws Exception {
+
+                mockMvc.perform(
+                                get("/api/transactions/history")
+                                                .param("page", "0")
+                                                .param("size", "10")
+                                                .with(user(customerOne.getEmail())
+                                                                .roles("CUSTOMER")))
+                                .andExpect(status().isOk());
+        }
+
 }

@@ -5,6 +5,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -31,123 +32,80 @@ import jakarta.validation.Valid;
 @Validated
 @PreAuthorize("hasRole('FRAUD_ANALYST')")
 public class FraudCaseController {
+        private final FraudCaseService fraudCaseService;
+        private final InvestigationNoteService investigationNoteService;
 
-    private final FraudCaseService fraudCaseService;
-    private final InvestigationNoteService investigationNoteService;
+        public FraudCaseController(FraudCaseService fraudCaseService,
+                        InvestigationNoteService investigationNoteService) {
+                this.fraudCaseService = fraudCaseService;
+                this.investigationNoteService = investigationNoteService;
+        }
 
-    public FraudCaseController(
-            FraudCaseService fraudCaseService,
-            InvestigationNoteService investigationNoteService) {
-        this.fraudCaseService = fraudCaseService;
-        this.investigationNoteService = investigationNoteService;
-    }
+        @PostMapping("/from-alert/{alertId}")
+        public ResponseEntity<FraudCaseResponse> createCase(@PathVariable Long alertId) {
+                FraudCase fraudCase = fraudCaseService.createCase(alertId);
+                return ResponseEntity.status(HttpStatus.CREATED).body(FraudCaseResponse.from(fraudCase));
+        }
 
-    @PostMapping("/from-alert/{alertId}")
-    public ResponseEntity<FraudCaseResponse> createCase(
-            @PathVariable Long alertId) {
+        @GetMapping
+        public ResponseEntity<Page<FraudCaseResponse>> getCases(@RequestParam(required = false) FraudCaseStatus status,
+                        Pageable pageable) {
+                Page<FraudCaseResponse> response = fraudCaseService.getCases(status, pageable)
+                                .map(FraudCaseResponse::from);
+                return ResponseEntity.ok(response);
+        }
 
-        FraudCase fraudCase = fraudCaseService.createCase(alertId);
+        @GetMapping("/{caseId}")
+        public ResponseEntity<FraudCaseResponse> getCase(@PathVariable Long caseId) {
+                return ResponseEntity.ok(FraudCaseResponse.from(fraudCaseService.getCase(caseId)));
+        }
 
-        return ResponseEntity
-                .status(HttpStatus.CREATED)
-                .body(FraudCaseResponse.from(fraudCase));
-    }
+        @PostMapping("/{caseId}/assign")
+        public ResponseEntity<FraudCaseResponse> assignCase(@PathVariable Long caseId,
+                        @Valid @RequestBody AssignFraudCaseRequest request) {
+                FraudCase fraudCase = fraudCaseService.assignCase(caseId, request.analystEmail());
+                return ResponseEntity.ok(FraudCaseResponse.from(fraudCase));
+        }
 
-    @GetMapping
-    public ResponseEntity<Page<FraudCaseResponse>> getCases(
-            @RequestParam(required = false) FraudCaseStatus status,
-            Pageable pageable) {
+        @PostMapping("/{caseId}/start")
+        public ResponseEntity<FraudCaseResponse> startInvestigation(@PathVariable Long caseId,
+                        Authentication authentication) {
+                return ResponseEntity.ok(FraudCaseResponse
+                                .from(fraudCaseService.startInvestigation(caseId, authentication.getName())));
+        }
 
-        Page<FraudCaseResponse> response = fraudCaseService
-                .getCases(status, pageable)
-                .map(FraudCaseResponse::from);
+        @PostMapping("/{caseId}/confirm-fraud")
+        public ResponseEntity<FraudCaseResponse> confirmFraud(@PathVariable Long caseId,
+                        Authentication authentication) {
+                return ResponseEntity.ok(FraudCaseResponse
+                                .from(fraudCaseService.confirmFraud(caseId, authentication.getName())));
+        }
 
-        return ResponseEntity.ok(response);
-    }
+        @PostMapping("/{caseId}/false-positive")
+        public ResponseEntity<FraudCaseResponse> markFalsePositive(@PathVariable Long caseId,
+                        Authentication authentication) {
+                return ResponseEntity.ok(FraudCaseResponse
+                                .from(fraudCaseService.markFalsePositive(caseId, authentication.getName())));
+        }
 
-    @GetMapping("/{caseId}")
-    public ResponseEntity<FraudCaseResponse> getCase(
-            @PathVariable Long caseId) {
+        @PostMapping("/{caseId}/close")
+        public ResponseEntity<FraudCaseResponse> closeCase(@PathVariable Long caseId, Authentication authentication) {
+                return ResponseEntity.ok(
+                                FraudCaseResponse.from(fraudCaseService.closeCase(caseId, authentication.getName())));
+        }
 
-        return ResponseEntity.ok(
-                FraudCaseResponse.from(
-                        fraudCaseService.getCase(caseId)));
-    }
+        @GetMapping("/{caseId}/notes")
+        public ResponseEntity<Page<InvestigationNoteResponse>> getNotes(@PathVariable Long caseId, Pageable pageable) {
+                Page<InvestigationNoteResponse> response = investigationNoteService.getNotes(caseId, pageable)
+                                .map(InvestigationNoteResponse::from);
+                return ResponseEntity.ok(response);
+        }
 
-    @PostMapping("/{caseId}/assign")
-    public ResponseEntity<FraudCaseResponse> assignCase(
-            @PathVariable Long caseId,
-            @Valid @RequestBody AssignFraudCaseRequest request) {
-
-        FraudCase fraudCase = fraudCaseService.assignCase(
-                caseId,
-                request.analystEmail());
-
-        return ResponseEntity.ok(
-                FraudCaseResponse.from(fraudCase));
-    }
-
-    @PostMapping("/{caseId}/start")
-    public ResponseEntity<FraudCaseResponse> startInvestigation(
-            @PathVariable Long caseId) {
-
-        return ResponseEntity.ok(
-                FraudCaseResponse.from(
-                        fraudCaseService.startInvestigation(caseId)));
-    }
-
-    @PostMapping("/{caseId}/confirm-fraud")
-    public ResponseEntity<FraudCaseResponse> confirmFraud(
-            @PathVariable Long caseId) {
-
-        return ResponseEntity.ok(
-                FraudCaseResponse.from(
-                        fraudCaseService.confirmFraud(caseId)));
-    }
-
-    @PostMapping("/{caseId}/false-positive")
-    public ResponseEntity<FraudCaseResponse> markFalsePositive(
-            @PathVariable Long caseId) {
-
-        return ResponseEntity.ok(
-                FraudCaseResponse.from(
-                        fraudCaseService.markFalsePositive(caseId)));
-    }
-
-    @PostMapping("/{caseId}/close")
-    public ResponseEntity<FraudCaseResponse> closeCase(
-            @PathVariable Long caseId) {
-
-        return ResponseEntity.ok(
-                FraudCaseResponse.from(
-                        fraudCaseService.closeCase(caseId)));
-    }
-
-    @GetMapping("/{caseId}/notes")
-    public ResponseEntity<Page<InvestigationNoteResponse>> getNotes(
-            @PathVariable Long caseId,
-            Pageable pageable) {
-
-        Page<InvestigationNoteResponse> response = investigationNoteService
-                .getNotes(caseId, pageable)
-                .map(InvestigationNoteResponse::from);
-
-        return ResponseEntity.ok(response);
-    }
-
-    @PostMapping("/{caseId}/notes")
-    public ResponseEntity<InvestigationNoteResponse> addNote(
-            @PathVariable Long caseId,
-            @Valid @RequestBody CreateInvestigationNoteRequest request,
-            org.springframework.security.core.Authentication authentication) {
-
-        InvestigationNote note = investigationNoteService.addNote(
-                caseId,
-                authentication.getName(),
-                request.content());
-
-        return ResponseEntity
-                .status(HttpStatus.CREATED)
-                .body(InvestigationNoteResponse.from(note));
-    }
+        @PostMapping("/{caseId}/notes")
+        public ResponseEntity<InvestigationNoteResponse> addNote(@PathVariable Long caseId,
+                        @Valid @RequestBody CreateInvestigationNoteRequest request, Authentication authentication) {
+                InvestigationNote note = investigationNoteService.addNote(caseId, authentication.getName(),
+                                request.content());
+                return ResponseEntity.status(HttpStatus.CREATED).body(InvestigationNoteResponse.from(note));
+        }
 }

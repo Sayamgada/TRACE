@@ -1,0 +1,17 @@
+package com.trace.audit.entity;
+
+public enum AuditAction {
+
+    USER_LOGIN,
+
+    TRANSACTION_CREATED,
+    TRANSACTION_BLOCKED,
+
+    ACCOUNT_FROZEN,
+
+    FRAUD_CASE_CREATED,
+    FRAUD_CASE_ASSIGNED,
+    FRAUD_CASE_RESOLVED,
+
+    FRAUD_RULE_UPDATED
+}

@@ -4,6 +4,7 @@ import java.util.List;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -25,55 +26,51 @@ import jakarta.validation.Valid;
 @Validated
 public class AccountController {
 
-    private final AccountService accountService;
+        private final AccountService accountService;
 
-    public AccountController(AccountService accountService) {
-        this.accountService = accountService;
-    }
+        public AccountController(AccountService accountService) {
+                this.accountService = accountService;
+        }
 
-    @PostMapping
-    public ResponseEntity<AccountResponse> createAccount(
-            @Valid @RequestBody CreateAccountRequest request,
-            Authentication authentication
-    ) {
-        AccountResponse response
-                = accountService.createAccount(request, authentication);
+        @PreAuthorize("hasRole('CUSTOMER')")
+        @PostMapping
+        public ResponseEntity<AccountResponse> createAccount(
+                        @Valid @RequestBody CreateAccountRequest request,
+                        Authentication authentication) {
+                AccountResponse response = accountService.createAccount(request, authentication);
 
-        return ResponseEntity
-                .status(HttpStatus.CREATED)
-                .body(response);
-    }
+                return ResponseEntity
+                                .status(HttpStatus.CREATED)
+                                .body(response);
+        }
 
-    @GetMapping
-    public ResponseEntity<List<AccountResponse>> getMyAccounts(
-            Authentication authentication
-    ) {
-        return ResponseEntity.ok(
-                accountService.getMyAccounts(authentication)
-        );
-    }
+        @PreAuthorize("hasRole('CUSTOMER')")
+        @GetMapping
+        public ResponseEntity<List<AccountResponse>> getMyAccounts(
+                        Authentication authentication) {
+                return ResponseEntity.ok(
+                                accountService.getMyAccounts(authentication));
+        }
 
-    @GetMapping("/{accountId}")
-    public ResponseEntity<AccountResponse> getMyAccount(
-            @PathVariable Long accountId,
-            Authentication authentication
-    ) {
-        return ResponseEntity.ok(
-                accountService.getMyAccount(
-                        accountId,
-                        authentication
-                )
-        );
-    }
+        @PreAuthorize("hasRole('CUSTOMER')")
+        @GetMapping("/{accountId}")
+        public ResponseEntity<AccountResponse> getMyAccount(
+                        @PathVariable Long accountId,
+                        Authentication authentication) {
+                return ResponseEntity.ok(
+                                accountService.getMyAccount(
+                                                accountId,
+                                                authentication));
+        }
 
-    @PostMapping("/{accountId}/deposit")
-    public ResponseEntity<AccountResponse> deposit(
-            @PathVariable Long accountId,
-            @Valid @RequestBody DepositRequest request,
-            Authentication authentication) {
+        @PreAuthorize("hasRole('CUSTOMER')")
+        @PostMapping("/{accountId}/deposit")
+        public ResponseEntity<AccountResponse> deposit(
+                        @PathVariable Long accountId,
+                        @Valid @RequestBody DepositRequest request,
+                        Authentication authentication) {
 
-        return ResponseEntity.ok(
-                accountService.deposit(accountId, request, authentication)
-        );
-    }
+                return ResponseEntity.ok(
+                                accountService.deposit(accountId, request, authentication));
+        }
 }

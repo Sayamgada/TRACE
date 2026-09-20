@@ -3,6 +3,7 @@ package com.trace.fraud.controller;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -25,8 +26,8 @@ public class FraudAlertController {
         this.fraudAlertService = fraudAlertService;
     }
 
+    @PreAuthorize("hasRole('FRAUD_ANALYST')")
     @GetMapping
-
     public Page<FraudAlertResponse> getAlerts(
             @RequestParam(name = "status", required = false) FraudAlertStatus status,
             @RequestParam(name = "severity", required = false) FraudAlertSeverity severity,
@@ -49,6 +50,7 @@ public class FraudAlertController {
         return alerts.map(this::toResponse);
     }
 
+    @PreAuthorize("hasRole('FRAUD_ANALYST')")
     @GetMapping("/{alertId}")
     public ResponseEntity<FraudAlertResponse> getAlert(
             @PathVariable Long alertId) {

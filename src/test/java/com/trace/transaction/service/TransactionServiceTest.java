@@ -12,6 +12,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import static org.mockito.Mockito.never;
@@ -24,6 +25,8 @@ import com.trace.account.entity.Account;
 import com.trace.account.entity.AccountStatus;
 import com.trace.account.entity.Currency;
 import com.trace.account.repository.AccountRepository;
+import com.trace.audit.entity.AuditAction;
+import com.trace.audit.service.AuditLogService;
 import com.trace.fraud.service.FraudAlertService;
 import com.trace.risk.context.FraudEvaluationContextFactory;
 import com.trace.risk.evaluator.FraudEvaluationContext;
@@ -45,397 +48,410 @@ import com.trace.user.repository.UserRepository;
 @ExtendWith(MockitoExtension.class)
 class TransactionServiceTest {
 
-    @Mock
-    private TransactionRepository transactionRepository;
-
-    @Mock
-    private AccountRepository accountRepository;
-
-    @Mock
-    private UserRepository userRepository;
-
-    @Mock
-    private RiskEvaluationService riskEvaluationService;
-
-    @Mock
-    private FraudEvaluationContextFactory fraudEvaluationContextFactory;
-
-    @Mock
-    private FraudAlertService fraudAlertService;
-
-    @Mock
-    private Authentication authentication;
-
-    @InjectMocks
-    private TransactionService transactionService;
-
-    private User user;
-    private Account sender;
-    private Account receiver;
-
-    @BeforeEach
-    void setUp() {
-        Role role = new Role(RoleName.ROLE_CUSTOMER);
-
-        user = new User(
-                "Test Customer",
-                "customer@test.com",
-                "hashed-password",
-                UserStatus.ACTIVE
-        );
-
-        user.addRole(role);
-
-        setEntityId(user, 1L);
-
-        sender = new Account(
-                "ACC-100001",
-                user,
-                new BigDecimal("10000.00"),
-                Currency.INR,
-                AccountStatus.ACTIVE
-        );
-
-        receiver = new Account(
-                "ACC-100002",
-                user,
-                new BigDecimal("5000.00"),
-                Currency.INR,
-                AccountStatus.ACTIVE
-        );
-
-        setEntityId(sender, 1L);
-        setEntityId(receiver, 2L);
-    }
-
-    @Test
-    void shouldApproveTransferWhenRiskDecisionIsApprove() {
-        CreateTransferRequest request
-                = new CreateTransferRequest(
-                        1L,
-                        2L,
-                        new BigDecimal("1500.00")
-                );
-
-        when(authentication.isAuthenticated())
-                .thenReturn(true);
-
-        when(authentication.getName())
-                .thenReturn(user.getEmail());
-
-        when(userRepository.findByEmailIgnoreCase(user.getEmail()))
-                .thenReturn(Optional.of(user));
-
-        when(accountRepository.findWithLockById(1L))
-                .thenReturn(Optional.of(sender));
-
-        when(accountRepository.findWithLockById(2L))
-                .thenReturn(Optional.of(receiver));
-
-        when(transactionRepository.save(any(Transaction.class)))
-                .thenAnswer(invocation
-                        -> invocation.getArgument(0));
-
-        when(fraudEvaluationContextFactory.create(
-                any(Transaction.class)
-        )).thenReturn(
-                new FraudEvaluationContext(
-                        Instant.parse(
-                                "2026-09-05T10:00:00Z"
-                        )
-                )
-        );
-
-        when(riskEvaluationService.evaluate(
-                any(Transaction.class),
-                any(FraudEvaluationContext.class)
-        )).thenReturn(
-                new RiskEvaluationResult(
-                        new BigDecimal("0.00"),
-                        RiskLevel.LOW,
-                        RiskDecision.APPROVE,
-                        List.of()
-                )
-        );
-
-        TransactionResponse response
-                = transactionService.createTransfer(
-                        request,
-                        authentication
-                );
-
-        assertThat(response.status())
-                .isEqualTo(TransactionStatus.APPROVED);
-
-        assertThat(response.riskScore())
-                .isEqualByComparingTo("0.00");
-
-        assertThat(sender.getBalance())
-                .isEqualByComparingTo("8500.00");
-
-        assertThat(receiver.getBalance())
-                .isEqualByComparingTo("6500.00");
-
-        verify(fraudEvaluationContextFactory)
-                .create(any(Transaction.class));
-
-        verify(accountRepository)
-                .save(sender);
-
-        verify(accountRepository)
-                .save(receiver);
-
-        verify(fraudAlertService, never())
-                .createAlert(
-                        any(Transaction.class),
-                        any(RiskEvaluationResult.class)
-                );
-    }
-
-    @Test
-    void shouldNotMutateBalancesWhenRiskDecisionIsReview() {
-        CreateTransferRequest request
-                = new CreateTransferRequest(
-                        1L,
-                        2L,
-                        new BigDecimal("1500.00")
-                );
-
-        when(authentication.isAuthenticated())
-                .thenReturn(true);
-
-        when(authentication.getName())
-                .thenReturn(user.getEmail());
-
-        when(userRepository.findByEmailIgnoreCase(user.getEmail()))
-                .thenReturn(Optional.of(user));
-
-        when(accountRepository.findWithLockById(1L))
-                .thenReturn(Optional.of(sender));
-
-        when(accountRepository.findWithLockById(2L))
-                .thenReturn(Optional.of(receiver));
-
-        when(transactionRepository.save(any(Transaction.class)))
-                .thenAnswer(invocation
-                        -> invocation.getArgument(0));
-
-        when(fraudEvaluationContextFactory.create(
-                any(Transaction.class)
-        )).thenReturn(
-                new FraudEvaluationContext(
-                        Instant.parse(
-                                "2026-09-05T10:00:00Z"
-                        )
-                )
-        );
-
-        RiskEvaluationResult riskResult
-                = new RiskEvaluationResult(
-                        new BigDecimal("30.00"),
-                        RiskLevel.MEDIUM,
-                        RiskDecision.REVIEW,
-                        List.of("HIGH_AMOUNT")
-                );
-
-        when(riskEvaluationService.evaluate(
-                any(Transaction.class),
-                any(FraudEvaluationContext.class)
-        )).thenReturn(riskResult);
-
-        TransactionResponse response
-                = transactionService.createTransfer(
-                        request,
-                        authentication
-                );
-
-        assertThat(response.status())
-                .isEqualTo(TransactionStatus.FLAGGED);
-
-        assertThat(response.riskScore())
-                .isEqualByComparingTo("30.00");
-
-        assertThat(sender.getBalance())
-                .isEqualByComparingTo("10000.00");
-
-        assertThat(receiver.getBalance())
-                .isEqualByComparingTo("5000.00");
-
-        verify(fraudEvaluationContextFactory)
-                .create(any(Transaction.class));
-
-        verify(accountRepository, never())
-                .save(sender);
-
-        verify(accountRepository, never())
-                .save(receiver);
-
-        verify(fraudAlertService)
-                .createAlert(
-                        any(Transaction.class),
-                        org.mockito.ArgumentMatchers.eq(riskResult)
-                );
-    }
-
-    @Test
-    void shouldNotMutateBalancesWhenRiskDecisionIsBlock() {
-        CreateTransferRequest request
-                = new CreateTransferRequest(
-                        1L,
-                        2L,
-                        new BigDecimal("1500.00")
-                );
-
-        when(authentication.isAuthenticated())
-                .thenReturn(true);
-
-        when(authentication.getName())
-                .thenReturn(user.getEmail());
-
-        when(userRepository.findByEmailIgnoreCase(user.getEmail()))
-                .thenReturn(Optional.of(user));
-
-        when(accountRepository.findWithLockById(1L))
-                .thenReturn(Optional.of(sender));
-
-        when(accountRepository.findWithLockById(2L))
-                .thenReturn(Optional.of(receiver));
-
-        when(transactionRepository.save(any(Transaction.class)))
-                .thenAnswer(invocation
-                        -> invocation.getArgument(0));
-
-        when(fraudEvaluationContextFactory.create(
-                any(Transaction.class)
-        )).thenReturn(
-                new FraudEvaluationContext(
-                        Instant.parse(
-                                "2026-09-05T10:00:00Z"
-                        )
-                )
-        );
-
-        RiskEvaluationResult riskResult
-                = new RiskEvaluationResult(
-                        new BigDecimal("70.00"),
-                        RiskLevel.HIGH,
-                        RiskDecision.BLOCK,
-                        List.of(
-                                "HIGH_AMOUNT",
-                                "TRANSACTION_FREQUENCY"
-                        )
-                );
-
-        when(riskEvaluationService.evaluate(
-                any(Transaction.class),
-                any(FraudEvaluationContext.class)
-        )).thenReturn(riskResult);
-
-        TransactionResponse response
-                = transactionService.createTransfer(
-                        request,
-                        authentication
-                );
-
-        assertThat(response.status())
-                .isEqualTo(TransactionStatus.BLOCKED);
-
-        assertThat(response.riskScore())
-                .isEqualByComparingTo("70.00");
-
-        assertThat(sender.getBalance())
-                .isEqualByComparingTo("10000.00");
-
-        assertThat(receiver.getBalance())
-                .isEqualByComparingTo("5000.00");
-
-        verify(fraudEvaluationContextFactory)
-                .create(any(Transaction.class));
-
-        verify(accountRepository, never())
-                .save(sender);
-
-        verify(accountRepository, never())
-                .save(receiver);
-
-        verify(fraudAlertService)
-                .createAlert(
-                        any(Transaction.class),
-                        org.mockito.ArgumentMatchers.eq(riskResult)
-                );
-    }
-
-    @Test
-    void shouldPreserveInsufficientBalanceValidation() {
-        sender.setBalance(new BigDecimal("500.00"));
-
-        CreateTransferRequest request
-                = new CreateTransferRequest(
-                        1L,
-                        2L,
-                        new BigDecimal("1500.00")
-                );
-
-        when(authentication.isAuthenticated())
-                .thenReturn(true);
-
-        when(authentication.getName())
-                .thenReturn(user.getEmail());
-
-        when(userRepository.findByEmailIgnoreCase(user.getEmail()))
-                .thenReturn(Optional.of(user));
-
-        when(accountRepository.findWithLockById(1L))
-                .thenReturn(Optional.of(sender));
-
-        when(accountRepository.findWithLockById(2L))
-                .thenReturn(Optional.of(receiver));
-
-        assertThatThrownBy(()
-                -> transactionService.createTransfer(
-                        request,
-                        authentication
-                )
-        )
-                .isInstanceOf(
-                        InsufficientBalanceException.class
-                );
-
-        verify(fraudEvaluationContextFactory, never())
-                .create(any(Transaction.class));
-
-        verify(riskEvaluationService, never())
-                .evaluate(any(), any());
-
-        verify(fraudAlertService, never())
-                .createAlert(
-                        any(Transaction.class),
-                        any(RiskEvaluationResult.class)
-                );
-
-        assertThat(sender.getBalance())
-                .isEqualByComparingTo("500.00");
-
-        assertThat(receiver.getBalance())
-                .isEqualByComparingTo("5000.00");
-    }
-
-    private void setEntityId(
-            Object entity,
-            Long id
-    ) {
-        try {
-            Field idField
-                    = entity.getClass().getDeclaredField("id");
-
-            idField.setAccessible(true);
-            idField.set(entity, id);
-
-        } catch (ReflectiveOperationException e) {
-            throw new IllegalStateException(
-                    "Failed to set test entity ID",
-                    e
-            );
+        @Mock
+        private TransactionRepository transactionRepository;
+
+        @Mock
+        private AccountRepository accountRepository;
+
+        @Mock
+        private UserRepository userRepository;
+
+        @Mock
+        private RiskEvaluationService riskEvaluationService;
+
+        @Mock
+        private FraudEvaluationContextFactory fraudEvaluationContextFactory;
+
+        @Mock
+        private FraudAlertService fraudAlertService;
+
+        @Mock
+        private AuditLogService auditLogService;
+
+        @Mock
+        private Authentication authentication;
+
+        @InjectMocks
+        private TransactionService transactionService;
+
+        private User user;
+        private Account sender;
+        private Account receiver;
+
+        @BeforeEach
+        void setUp() {
+                Role role = new Role(RoleName.ROLE_CUSTOMER);
+
+                user = new User(
+                                "Test Customer",
+                                "customer@test.com",
+                                "hashed-password",
+                                UserStatus.ACTIVE);
+
+                user.addRole(role);
+
+                setEntityId(user, 1L);
+
+                sender = new Account(
+                                "ACC-100001",
+                                user,
+                                new BigDecimal("10000.00"),
+                                Currency.INR,
+                                AccountStatus.ACTIVE);
+
+                receiver = new Account(
+                                "ACC-100002",
+                                user,
+                                new BigDecimal("5000.00"),
+                                Currency.INR,
+                                AccountStatus.ACTIVE);
+
+                setEntityId(sender, 1L);
+                setEntityId(receiver, 2L);
         }
-    }
+
+        @Test
+        void shouldApproveTransferWhenRiskDecisionIsApprove() {
+                CreateTransferRequest request = new CreateTransferRequest(
+                                1L,
+                                2L,
+                                new BigDecimal("1500.00"));
+
+                when(authentication.isAuthenticated())
+                                .thenReturn(true);
+
+                when(authentication.getName())
+                                .thenReturn(user.getEmail());
+
+                when(userRepository.findByEmailIgnoreCase(user.getEmail()))
+                                .thenReturn(Optional.of(user));
+
+                when(accountRepository.findWithLockById(1L))
+                                .thenReturn(Optional.of(sender));
+
+                when(accountRepository.findWithLockById(2L))
+                                .thenReturn(Optional.of(receiver));
+
+                when(transactionRepository.save(any(Transaction.class)))
+                                .thenAnswer(invocation -> invocation.getArgument(0));
+
+                when(fraudEvaluationContextFactory.create(
+                                any(Transaction.class))).thenReturn(
+                                                new FraudEvaluationContext(
+                                                                Instant.parse(
+                                                                                "2026-09-05T10:00:00Z")));
+
+                when(riskEvaluationService.evaluate(
+                                any(Transaction.class),
+                                any(FraudEvaluationContext.class))).thenReturn(
+                                                new RiskEvaluationResult(
+                                                                new BigDecimal("0.00"),
+                                                                RiskLevel.LOW,
+                                                                RiskDecision.APPROVE,
+                                                                List.of()));
+
+                TransactionResponse response = transactionService.createTransfer(
+                                request,
+                                authentication);
+
+                assertThat(response.status())
+                                .isEqualTo(TransactionStatus.APPROVED);
+
+                assertThat(response.riskScore())
+                                .isEqualByComparingTo("0.00");
+
+                assertThat(sender.getBalance())
+                                .isEqualByComparingTo("8500.00");
+
+                assertThat(receiver.getBalance())
+                                .isEqualByComparingTo("6500.00");
+
+                verify(fraudEvaluationContextFactory)
+                                .create(any(Transaction.class));
+
+                verify(accountRepository)
+                                .save(sender);
+
+                verify(accountRepository)
+                                .save(receiver);
+
+                verify(auditLogService).record(
+                                eq(user.getId()),
+                                eq(AuditAction.TRANSACTION_CREATED),
+                                eq("Transaction"),
+                                any(),
+                                eq(null),
+                                eq(TransactionStatus.PENDING.name()),
+                                eq(null));
+
+                verify(auditLogService, never()).record(
+                                eq(user.getId()),
+                                eq(AuditAction.TRANSACTION_BLOCKED),
+                                eq("Transaction"),
+                                any(),
+                                any(),
+                                any(),
+                                any());
+
+                verify(fraudAlertService, never())
+                                .createAlert(
+                                                any(Transaction.class),
+                                                any(RiskEvaluationResult.class));
+        }
+
+        @Test
+        void shouldNotMutateBalancesWhenRiskDecisionIsReview() {
+                CreateTransferRequest request = new CreateTransferRequest(
+                                1L,
+                                2L,
+                                new BigDecimal("1500.00"));
+
+                when(authentication.isAuthenticated())
+                                .thenReturn(true);
+
+                when(authentication.getName())
+                                .thenReturn(user.getEmail());
+
+                when(userRepository.findByEmailIgnoreCase(user.getEmail()))
+                                .thenReturn(Optional.of(user));
+
+                when(accountRepository.findWithLockById(1L))
+                                .thenReturn(Optional.of(sender));
+
+                when(accountRepository.findWithLockById(2L))
+                                .thenReturn(Optional.of(receiver));
+
+                when(transactionRepository.save(any(Transaction.class)))
+                                .thenAnswer(invocation -> invocation.getArgument(0));
+
+                when(fraudEvaluationContextFactory.create(
+                                any(Transaction.class))).thenReturn(
+                                                new FraudEvaluationContext(
+                                                                Instant.parse(
+                                                                                "2026-09-05T10:00:00Z")));
+
+                RiskEvaluationResult riskResult = new RiskEvaluationResult(
+                                new BigDecimal("30.00"),
+                                RiskLevel.MEDIUM,
+                                RiskDecision.REVIEW,
+                                List.of("HIGH_AMOUNT"));
+
+                when(riskEvaluationService.evaluate(
+                                any(Transaction.class),
+                                any(FraudEvaluationContext.class))).thenReturn(riskResult);
+
+                TransactionResponse response = transactionService.createTransfer(
+                                request,
+                                authentication);
+
+                assertThat(response.status())
+                                .isEqualTo(TransactionStatus.FLAGGED);
+
+                assertThat(response.riskScore())
+                                .isEqualByComparingTo("30.00");
+
+                assertThat(sender.getBalance())
+                                .isEqualByComparingTo("10000.00");
+
+                assertThat(receiver.getBalance())
+                                .isEqualByComparingTo("5000.00");
+
+                verify(fraudEvaluationContextFactory)
+                                .create(any(Transaction.class));
+
+                verify(accountRepository, never())
+                                .save(sender);
+
+                verify(accountRepository, never())
+                                .save(receiver);
+
+                verify(auditLogService).record(
+                                eq(user.getId()),
+                                eq(AuditAction.TRANSACTION_CREATED),
+                                eq("Transaction"),
+                                any(),
+                                eq(null),
+                                eq(TransactionStatus.PENDING.name()),
+                                eq(null));
+
+                verify(auditLogService, never()).record(
+                                eq(user.getId()),
+                                eq(AuditAction.TRANSACTION_BLOCKED),
+                                eq("Transaction"),
+                                any(),
+                                any(),
+                                any(),
+                                any());
+
+                verify(fraudAlertService)
+                                .createAlert(
+                                                any(Transaction.class),
+                                                eq(riskResult));
+        }
+
+        @Test
+        void shouldNotMutateBalancesWhenRiskDecisionIsBlock() {
+                CreateTransferRequest request = new CreateTransferRequest(
+                                1L,
+                                2L,
+                                new BigDecimal("1500.00"));
+
+                when(authentication.isAuthenticated())
+                                .thenReturn(true);
+
+                when(authentication.getName())
+                                .thenReturn(user.getEmail());
+
+                when(userRepository.findByEmailIgnoreCase(user.getEmail()))
+                                .thenReturn(Optional.of(user));
+
+                when(accountRepository.findWithLockById(1L))
+                                .thenReturn(Optional.of(sender));
+
+                when(accountRepository.findWithLockById(2L))
+                                .thenReturn(Optional.of(receiver));
+
+                when(transactionRepository.save(any(Transaction.class)))
+                                .thenAnswer(invocation -> invocation.getArgument(0));
+
+                when(fraudEvaluationContextFactory.create(
+                                any(Transaction.class))).thenReturn(
+                                                new FraudEvaluationContext(
+                                                                Instant.parse(
+                                                                                "2026-09-05T10:00:00Z")));
+
+                RiskEvaluationResult riskResult = new RiskEvaluationResult(
+                                new BigDecimal("70.00"),
+                                RiskLevel.HIGH,
+                                RiskDecision.BLOCK,
+                                List.of(
+                                                "HIGH_AMOUNT",
+                                                "TRANSACTION_FREQUENCY"));
+
+                when(riskEvaluationService.evaluate(
+                                any(Transaction.class),
+                                any(FraudEvaluationContext.class))).thenReturn(riskResult);
+
+                TransactionResponse response = transactionService.createTransfer(
+                                request,
+                                authentication);
+
+                assertThat(response.status())
+                                .isEqualTo(TransactionStatus.BLOCKED);
+
+                assertThat(response.riskScore())
+                                .isEqualByComparingTo("70.00");
+
+                assertThat(sender.getBalance())
+                                .isEqualByComparingTo("10000.00");
+
+                assertThat(receiver.getBalance())
+                                .isEqualByComparingTo("5000.00");
+
+                verify(fraudEvaluationContextFactory)
+                                .create(any(Transaction.class));
+
+                verify(accountRepository, never())
+                                .save(sender);
+
+                verify(accountRepository, never())
+                                .save(receiver);
+
+                verify(auditLogService).record(
+                                eq(user.getId()),
+                                eq(AuditAction.TRANSACTION_CREATED),
+                                eq("Transaction"),
+                                any(),
+                                eq(null),
+                                eq(TransactionStatus.PENDING.name()),
+                                eq(null));
+
+                verify(auditLogService).record(
+                                eq(user.getId()),
+                                eq(AuditAction.TRANSACTION_BLOCKED),
+                                eq("Transaction"),
+                                any(),
+                                eq(TransactionStatus.PENDING.name()),
+                                eq(TransactionStatus.BLOCKED.name()),
+                                eq(null));
+
+                verify(fraudAlertService)
+                                .createAlert(
+                                                any(Transaction.class),
+                                                eq(riskResult));
+        }
+
+        @Test
+        void shouldPreserveInsufficientBalanceValidation() {
+                sender.setBalance(new BigDecimal("500.00"));
+
+                CreateTransferRequest request = new CreateTransferRequest(
+                                1L,
+                                2L,
+                                new BigDecimal("1500.00"));
+
+                when(authentication.isAuthenticated())
+                                .thenReturn(true);
+
+                when(authentication.getName())
+                                .thenReturn(user.getEmail());
+
+                when(userRepository.findByEmailIgnoreCase(user.getEmail()))
+                                .thenReturn(Optional.of(user));
+
+                when(accountRepository.findWithLockById(1L))
+                                .thenReturn(Optional.of(sender));
+
+                when(accountRepository.findWithLockById(2L))
+                                .thenReturn(Optional.of(receiver));
+
+                assertThatThrownBy(() -> transactionService.createTransfer(
+                                request,
+                                authentication))
+                                .isInstanceOf(
+                                                InsufficientBalanceException.class);
+
+                verify(fraudEvaluationContextFactory, never())
+                                .create(any(Transaction.class));
+
+                verify(riskEvaluationService, never())
+                                .evaluate(any(), any());
+
+                verify(auditLogService, never()).record(
+                                any(),
+                                any(),
+                                any(),
+                                any(),
+                                any(),
+                                any(),
+                                any());
+
+                verify(fraudAlertService, never())
+                                .createAlert(
+                                                any(Transaction.class),
+                                                any(RiskEvaluationResult.class));
+
+                assertThat(sender.getBalance())
+                                .isEqualByComparingTo("500.00");
+
+                assertThat(receiver.getBalance())
+                                .isEqualByComparingTo("5000.00");
+        }
+
+        private void setEntityId(
+                        Object entity,
+                        Long id) {
+                try {
+                        Field idField = entity.getClass().getDeclaredField("id");
+
+                        idField.setAccessible(true);
+                        idField.set(entity, id);
+
+                } catch (ReflectiveOperationException e) {
+                        throw new IllegalStateException(
+                                        "Failed to set test entity ID",
+                                        e);
+                }
+        }
 }

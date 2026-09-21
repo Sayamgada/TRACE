@@ -144,4 +144,9 @@ public class AuthService {
                                 "Bearer",
                                 jwtService.getExpirationMillis());
         }
+
+        @Transactional
+        public void logout(RefreshTokenRequest request) {
+                refreshTokenService.revokeToken(request.refreshToken());
+        }
 }

@@ -461,7 +461,7 @@ class SecurityAuthorizationIntegrationTest {
                                                 true));
 
                 mockMvc.perform(
-                                put("/api/fraud/rules/{ruleId}", fraudRule.getId())
+                                put("/api/admin/fraud-rules/{ruleId}", fraudRule.getId())
                                                 .with(user(admin.getEmail())
                                                                 .roles("ADMIN"))
                                                 .contentType(MediaType.APPLICATION_JSON)
@@ -501,7 +501,7 @@ class SecurityAuthorizationIntegrationTest {
                                                 true));
 
                 mockMvc.perform(
-                                put("/api/fraud/rules/{ruleId}", fraudRule.getId())
+                                put("/api/admin/fraud-rules/{ruleId}", fraudRule.getId())
                                                 .with(user(customerOne.getEmail())
                                                                 .roles("CUSTOMER"))
                                                 .contentType(MediaType.APPLICATION_JSON)
@@ -529,7 +529,7 @@ class SecurityAuthorizationIntegrationTest {
                                                 true));
 
                 mockMvc.perform(
-                                put("/api/fraud/rules/{ruleId}", fraudRule.getId())
+                                put("/api/admin/fraud-rules/{ruleId}", fraudRule.getId())
                                                 .with(user("analyst@example.com")
                                                                 .roles("FRAUD_ANALYST"))
                                                 .contentType(MediaType.APPLICATION_JSON)
@@ -557,7 +557,7 @@ class SecurityAuthorizationIntegrationTest {
                                                 true));
 
                 mockMvc.perform(
-                                put("/api/fraud/rules/{ruleId}", fraudRule.getId())
+                                put("/api/admin/fraud-rules/{ruleId}", fraudRule.getId())
                                                 .with(user("employee@example.com")
                                                                 .roles("BANK_EMPLOYEE"))
                                                 .contentType(MediaType.APPLICATION_JSON)
@@ -585,7 +585,7 @@ class SecurityAuthorizationIntegrationTest {
                                                 true));
 
                 mockMvc.perform(
-                                put("/api/fraud/rules/{ruleId}", fraudRule.getId())
+                                put("/api/admin/fraud-rules/{ruleId}", fraudRule.getId())
                                                 .with(user("auditor@example.com")
                                                                 .roles("AUDITOR"))
                                                 .contentType(MediaType.APPLICATION_JSON)
@@ -606,7 +606,7 @@ class SecurityAuthorizationIntegrationTest {
                         throws Exception {
 
                 mockMvc.perform(
-                                put("/api/fraud/rules/{ruleId}", 999999L)
+                                put("/api/admin/fraud-rules/{ruleId}", 999999L)
                                                 .contentType(MediaType.APPLICATION_JSON)
                                                 .content("""
                                                                 {
@@ -625,7 +625,7 @@ class SecurityAuthorizationIntegrationTest {
                         throws Exception {
 
                 mockMvc.perform(
-                                put("/api/fraud/rules/{ruleId}", 999999L)
+                                put("/api/admin/fraud-rules/{ruleId}", 999999L)
                                                 .with(user(admin.getEmail())
                                                                 .roles("ADMIN"))
                                                 .contentType(MediaType.APPLICATION_JSON)
@@ -654,7 +654,7 @@ class SecurityAuthorizationIntegrationTest {
                                                 true));
 
                 mockMvc.perform(
-                                put("/api/fraud/rules/{ruleId}", fraudRule.getId())
+                                put("/api/admin/fraud-rules/{ruleId}", fraudRule.getId())
                                                 .with(user(admin.getEmail())
                                                                 .roles("ADMIN"))
                                                 .contentType(MediaType.APPLICATION_JSON)

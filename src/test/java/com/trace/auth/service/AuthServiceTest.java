@@ -304,4 +304,16 @@ class AuthServiceTest {
                 verify(refreshTokenService)
                                 .createToken(user);
         }
+
+        @Test
+        void shouldRevokeRefreshTokenOnLogout() {
+
+                String refreshToken = "refresh-token";
+                RefreshTokenRequest request = new RefreshTokenRequest(refreshToken);
+
+                authService.logout(request);
+
+                verify(refreshTokenService)
+                                .revokeToken(refreshToken);
+        }
 }

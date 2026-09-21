@@ -1,5 +1,6 @@
 package com.trace.account.controller;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 import org.springframework.http.HttpStatus;
@@ -37,6 +38,7 @@ public class AccountController {
         public ResponseEntity<AccountResponse> createAccount(
                         @Valid @RequestBody CreateAccountRequest request,
                         Authentication authentication) {
+
                 AccountResponse response = accountService.createAccount(request, authentication);
 
                 return ResponseEntity
@@ -48,6 +50,16 @@ public class AccountController {
         @GetMapping
         public ResponseEntity<List<AccountResponse>> getMyAccounts(
                         Authentication authentication) {
+
+                return ResponseEntity.ok(
+                                accountService.getMyAccounts(authentication));
+        }
+
+        @PreAuthorize("hasRole('CUSTOMER')")
+        @GetMapping("/me")
+        public ResponseEntity<List<AccountResponse>> getMyAccountsForCurrentUser(
+                        Authentication authentication) {
+
                 return ResponseEntity.ok(
                                 accountService.getMyAccounts(authentication));
         }
@@ -57,10 +69,24 @@ public class AccountController {
         public ResponseEntity<AccountResponse> getMyAccount(
                         @PathVariable Long accountId,
                         Authentication authentication) {
+
                 return ResponseEntity.ok(
                                 accountService.getMyAccount(
                                                 accountId,
                                                 authentication));
+        }
+
+        @PreAuthorize("hasRole('CUSTOMER')")
+        @GetMapping("/{accountId}/balance")
+        public ResponseEntity<BigDecimal> getBalance(
+                        @PathVariable Long accountId,
+                        Authentication authentication) {
+
+                return ResponseEntity.ok(
+                                accountService.getMyAccount(
+                                                accountId,
+                                                authentication)
+                                                .balance());
         }
 
         @PreAuthorize("hasRole('CUSTOMER')")
@@ -71,6 +97,9 @@ public class AccountController {
                         Authentication authentication) {
 
                 return ResponseEntity.ok(
-                                accountService.deposit(accountId, request, authentication));
+                                accountService.deposit(
+                                                accountId,
+                                                request,
+                                                authentication));
         }
 }

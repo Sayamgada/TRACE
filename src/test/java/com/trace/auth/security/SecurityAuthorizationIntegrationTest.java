@@ -899,4 +899,50 @@ class SecurityAuthorizationIntegrationTest {
                                                                 .roles("CUSTOMER")))
                                 .andExpect(status().isOk());
         }
+
+        @Test
+        void customerCanAccessOwnAccountsThroughMeEndpoint() throws Exception {
+                mockMvc.perform(
+                                get("/api/accounts/me")
+                                                .with(user(customerOne.getEmail())
+                                                                .roles("CUSTOMER")))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$[0].id")
+                                                .value(accountOne.getId()))
+                                .andExpect(jsonPath("$[0].accountNumber")
+                                                .value("100000000001"));
+        }
+
+        @Test
+        void unauthenticatedUserCannotAccessAccountsThroughMeEndpoint()
+                        throws Exception {
+
+                mockMvc.perform(
+                                get("/api/accounts/me"))
+                                .andExpect(status().isUnauthorized());
+        }
+
+        @Test
+        void customerCanAccessOwnAccountBalance() throws Exception {
+                mockMvc.perform(
+                                get("/api/accounts/{accountId}/balance",
+                                                accountOne.getId())
+                                                .with(user(customerOne.getEmail())
+                                                                .roles("CUSTOMER")))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$")
+                                                .value(10000.00));
+        }
+
+        @Test
+        void customerCannotAccessAnotherCustomersAccountBalance()
+                        throws Exception {
+
+                mockMvc.perform(
+                                get("/api/accounts/{accountId}/balance",
+                                                accountTwo.getId())
+                                                .with(user(customerOne.getEmail())
+                                                                .roles("CUSTOMER")))
+                                .andExpect(status().isNotFound());
+        }
 }

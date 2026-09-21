@@ -33,187 +33,261 @@ import com.trace.user.repository.UserRepository;
 @ExtendWith(MockitoExtension.class)
 class AccountServiceTest {
 
-    @Mock
-    private AccountRepository accountRepository;
+        @Mock
+        private AccountRepository accountRepository;
 
-    @Mock
-    private UserRepository userRepository;
+        @Mock
+        private UserRepository userRepository;
 
-    @Mock
-    private AuditLogService auditLogService;
+        @Mock
+        private AuditLogService auditLogService;
 
-    @Mock
-    private Authentication authentication;
+        @Mock
+        private Authentication authentication;
 
-    @InjectMocks
-    private AccountService accountService;
+        @InjectMocks
+        private AccountService accountService;
 
-    private User user;
-    private Account account;
+        private User user;
+        private Account account;
 
-    @BeforeEach
-    void setUp() {
-        Role role = new Role(RoleName.ROLE_CUSTOMER);
+        @BeforeEach
+        void setUp() {
+                Role role = new Role(RoleName.ROLE_CUSTOMER);
 
-        user = new User(
-                "Test Customer",
-                "customer@test.com",
-                "hashed-password",
-                UserStatus.ACTIVE
-        );
+                user = new User(
+                                "Test Customer",
+                                "customer@test.com",
+                                "hashed-password",
+                                UserStatus.ACTIVE);
 
-        user.addRole(role);
+                user.addRole(role);
 
-        setEntityId(user, 1L);
+                setEntityId(user, 1L);
 
-        account = new Account(
-                "123456789012",
-                user,
-                new BigDecimal("10000.00"),
-                Currency.INR,
-                AccountStatus.ACTIVE
-        );
+                account = new Account(
+                                "123456789012",
+                                user,
+                                new BigDecimal("10000.00"),
+                                Currency.INR,
+                                AccountStatus.ACTIVE);
 
-        setEntityId(account, 10L);
-    }
-
-    @Test
-    void shouldFreezeActiveAccountAndRecordAudit() {
-        when(authentication.isAuthenticated())
-                .thenReturn(true);
-
-        when(authentication.getName())
-                .thenReturn(user.getEmail());
-
-        when(userRepository.findByEmailIgnoreCase(user.getEmail()))
-                .thenReturn(Optional.of(user));
-
-        when(accountRepository.findById(10L))
-                .thenReturn(Optional.of(account));
-
-        when(accountRepository.save(account))
-                .thenAnswer(invocation ->
-                        invocation.getArgument(0));
-
-        var response = accountService.freezeAccount(
-                10L,
-                authentication
-        );
-
-        assertThat(response.status())
-                .isEqualTo(AccountStatus.FROZEN);
-
-        assertThat(account.getStatus())
-                .isEqualTo(AccountStatus.FROZEN);
-
-        verify(accountRepository)
-                .save(account);
-
-        verify(auditLogService).record(
-                eq(user.getId()),
-                eq(AuditAction.ACCOUNT_FROZEN),
-                eq("Account"),
-                eq(10L),
-                eq(AccountStatus.ACTIVE.name()),
-                eq(AccountStatus.FROZEN.name()),
-                eq(null)
-        );
-    }
-
-    @Test
-    void shouldRejectAlreadyFrozenAccount() {
-        account.setStatus(AccountStatus.FROZEN);
-
-        when(authentication.isAuthenticated())
-                .thenReturn(true);
-
-        when(authentication.getName())
-                .thenReturn(user.getEmail());
-
-        when(userRepository.findByEmailIgnoreCase(user.getEmail()))
-                .thenReturn(Optional.of(user));
-
-        when(accountRepository.findById(10L))
-                .thenReturn(Optional.of(account));
-
-        assertThatThrownBy(() ->
-                accountService.freezeAccount(
-                        10L,
-                        authentication
-                )
-        )
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessage("Account is already frozen");
-
-        verify(accountRepository, never())
-                .save(any(Account.class));
-
-        verify(auditLogService, never()).record(
-                any(),
-                any(),
-                any(),
-                any(),
-                any(),
-                any(),
-                any()
-        );
-    }
-
-    @Test
-    void shouldRejectMissingAccount() {
-        when(authentication.isAuthenticated())
-                .thenReturn(true);
-
-        when(authentication.getName())
-                .thenReturn(user.getEmail());
-
-        when(userRepository.findByEmailIgnoreCase(user.getEmail()))
-                .thenReturn(Optional.of(user));
-
-        when(accountRepository.findById(10L))
-                .thenReturn(Optional.empty());
-
-        assertThatThrownBy(() ->
-                accountService.freezeAccount(
-                        10L,
-                        authentication
-                )
-        )
-                .isInstanceOf(
-                        com.trace.common.exception.ResourceNotFoundException.class
-                )
-                .hasMessage("Account not found: 10");
-
-        verify(accountRepository, never())
-                .save(any(Account.class));
-
-        verify(auditLogService, never()).record(
-                any(),
-                any(),
-                any(),
-                any(),
-                any(),
-                any(),
-                any()
-        );
-    }
-
-    private void setEntityId(
-            Object entity,
-            Long id
-    ) {
-        try {
-            var idField = entity.getClass()
-                    .getDeclaredField("id");
-
-            idField.setAccessible(true);
-            idField.set(entity, id);
-
-        } catch (ReflectiveOperationException e) {
-            throw new IllegalStateException(
-                    "Failed to set test entity ID",
-                    e
-            );
+                setEntityId(account, 10L);
         }
-    }
+
+        @Test
+        void shouldFreezeActiveAccountAndRecordAudit() {
+                when(authentication.isAuthenticated())
+                                .thenReturn(true);
+
+                when(authentication.getName())
+                                .thenReturn(user.getEmail());
+
+                when(userRepository.findByEmailIgnoreCase(user.getEmail()))
+                                .thenReturn(Optional.of(user));
+
+                when(accountRepository.findById(10L))
+                                .thenReturn(Optional.of(account));
+
+                when(accountRepository.save(account))
+                                .thenAnswer(invocation -> invocation.getArgument(0));
+
+                var response = accountService.freezeAccount(
+                                10L,
+                                authentication);
+
+                assertThat(response.status())
+                                .isEqualTo(AccountStatus.FROZEN);
+
+                assertThat(account.getStatus())
+                                .isEqualTo(AccountStatus.FROZEN);
+
+                verify(accountRepository)
+                                .save(account);
+
+                verify(auditLogService).record(
+                                eq(user.getId()),
+                                eq(AuditAction.ACCOUNT_FROZEN),
+                                eq("Account"),
+                                eq(10L),
+                                eq(AccountStatus.ACTIVE.name()),
+                                eq(AccountStatus.FROZEN.name()),
+                                eq(null));
+        }
+
+        @Test
+        void shouldRejectAlreadyFrozenAccount() {
+                account.setStatus(AccountStatus.FROZEN);
+
+                when(authentication.isAuthenticated())
+                                .thenReturn(true);
+
+                when(authentication.getName())
+                                .thenReturn(user.getEmail());
+
+                when(userRepository.findByEmailIgnoreCase(user.getEmail()))
+                                .thenReturn(Optional.of(user));
+
+                when(accountRepository.findById(10L))
+                                .thenReturn(Optional.of(account));
+
+                assertThatThrownBy(() -> accountService.freezeAccount(
+                                10L,
+                                authentication))
+                                .isInstanceOf(IllegalStateException.class)
+                                .hasMessage("Account is already frozen");
+
+                verify(accountRepository, never())
+                                .save(any(Account.class));
+
+                verify(auditLogService, never()).record(
+                                any(),
+                                any(),
+                                any(),
+                                any(),
+                                any(),
+                                any(),
+                                any());
+        }
+
+        @Test
+        void shouldRejectMissingAccount() {
+                when(authentication.isAuthenticated())
+                                .thenReturn(true);
+
+                when(authentication.getName())
+                                .thenReturn(user.getEmail());
+
+                when(userRepository.findByEmailIgnoreCase(user.getEmail()))
+                                .thenReturn(Optional.of(user));
+
+                when(accountRepository.findById(10L))
+                                .thenReturn(Optional.empty());
+
+                assertThatThrownBy(() -> accountService.freezeAccount(
+                                10L,
+                                authentication))
+                                .isInstanceOf(
+                                                com.trace.common.exception.ResourceNotFoundException.class)
+                                .hasMessage("Account not found: 10");
+
+                verify(accountRepository, never())
+                                .save(any(Account.class));
+
+                verify(auditLogService, never()).record(
+                                any(),
+                                any(),
+                                any(),
+                                any(),
+                                any(),
+                                any(),
+                                any());
+        }
+
+        private void setEntityId(
+                        Object entity,
+                        Long id) {
+                try {
+                        var idField = entity.getClass()
+                                        .getDeclaredField("id");
+
+                        idField.setAccessible(true);
+                        idField.set(entity, id);
+
+                } catch (ReflectiveOperationException e) {
+                        throw new IllegalStateException(
+                                        "Failed to set test entity ID",
+                                        e);
+                }
+        }
+
+        @Test
+        void shouldReturnMyAccounts() {
+                when(authentication.isAuthenticated())
+                                .thenReturn(true);
+
+                when(authentication.getName())
+                                .thenReturn(user.getEmail());
+
+                when(userRepository.findByEmailIgnoreCase(user.getEmail()))
+                                .thenReturn(Optional.of(user));
+
+                when(accountRepository.findByUserId(user.getId()))
+                                .thenReturn(java.util.List.of(account));
+
+                var response = accountService.getMyAccounts(authentication);
+
+                assertThat(response)
+                                .hasSize(1);
+
+                assertThat(response.get(0).id())
+                                .isEqualTo(10L);
+
+                assertThat(response.get(0).balance())
+                                .isEqualByComparingTo("10000.00");
+        }
+
+        @Test
+        void shouldReturnMyAccount() {
+                when(authentication.isAuthenticated())
+                                .thenReturn(true);
+
+                when(authentication.getName())
+                                .thenReturn(user.getEmail());
+
+                when(userRepository.findByEmailIgnoreCase(user.getEmail()))
+                                .thenReturn(Optional.of(user));
+
+                when(accountRepository.findById(10L))
+                                .thenReturn(Optional.of(account));
+
+                var response = accountService.getMyAccount(
+                                10L,
+                                authentication);
+
+                assertThat(response.id())
+                                .isEqualTo(10L);
+
+                assertThat(response.balance())
+                                .isEqualByComparingTo("10000.00");
+        }
+
+        @Test
+        void shouldNotExposeAnotherUsersAccount() {
+                User anotherUser = new User(
+                                "Another Customer",
+                                "another@test.com",
+                                "hashed-password",
+                                UserStatus.ACTIVE);
+
+                setEntityId(anotherUser, 2L);
+
+                Account anotherAccount = new Account(
+                                "999999999999",
+                                anotherUser,
+                                new BigDecimal("5000.00"),
+                                Currency.INR,
+                                AccountStatus.ACTIVE);
+
+                setEntityId(anotherAccount, 20L);
+
+                when(authentication.isAuthenticated())
+                                .thenReturn(true);
+
+                when(authentication.getName())
+                                .thenReturn(user.getEmail());
+
+                when(userRepository.findByEmailIgnoreCase(user.getEmail()))
+                                .thenReturn(Optional.of(user));
+
+                when(accountRepository.findById(20L))
+                                .thenReturn(Optional.of(anotherAccount));
+
+                assertThatThrownBy(() -> accountService.getMyAccount(
+                                20L,
+                                authentication))
+                                .isInstanceOf(
+                                                com.trace.common.exception.ResourceNotFoundException.class)
+                                .hasMessage("Account not found: 20");
+        }
 }

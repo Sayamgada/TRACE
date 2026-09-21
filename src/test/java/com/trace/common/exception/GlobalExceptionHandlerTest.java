@@ -66,6 +66,16 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
+    void shouldHandleIllegalArgumentException() throws Exception {
+        mockMvc.perform(get("/test/illegal-argument"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.error").value("INVALID_ARGUMENT"))
+                .andExpect(jsonPath("$.message").value("Test invalid argument."))
+                .andExpect(jsonPath("$.path").value("/test/illegal-argument"));
+    }
+
+    @Test
     void shouldHandleUnexpectedException() throws Exception {
         mockMvc.perform(get("/test/unexpected-error"))
                 .andExpect(status().isInternalServerError())
@@ -90,6 +100,11 @@ class GlobalExceptionHandlerTest {
 
         @PostMapping("/test/validation")
         void validation(@Valid @RequestBody TestRequest request) {
+        }
+
+        @GetMapping("/test/illegal-argument")
+        void illegalArgument() {
+            throw new IllegalArgumentException("Test invalid argument.");
         }
 
         @GetMapping("/test/unexpected-error")

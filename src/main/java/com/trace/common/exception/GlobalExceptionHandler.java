@@ -111,4 +111,22 @@ public class GlobalExceptionHandler {
                                 .status(HttpStatus.FORBIDDEN)
                                 .body(response);
         }
+
+        @ExceptionHandler(IllegalArgumentException.class)
+        public ResponseEntity<ApiErrorResponse> handleIllegalArgumentException(
+                        IllegalArgumentException exception,
+                        HttpServletRequest request) {
+
+                ApiErrorResponse response = new ApiErrorResponse(
+                                Instant.now(),
+                                HttpStatus.BAD_REQUEST.value(),
+                                "INVALID_ARGUMENT",
+                                exception.getMessage(),
+                                request.getRequestURI());
+
+                return ResponseEntity
+                                .badRequest()
+                                .body(response);
+        }
+
 }

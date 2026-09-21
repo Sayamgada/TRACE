@@ -20,11 +20,18 @@ import com.trace.account.dto.CreateAccountRequest;
 import com.trace.account.dto.DepositRequest;
 import com.trace.account.service.AccountService;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/api/accounts")
 @Validated
+@Tag(name = "Accounts", description = "Customer account creation, retrieval, balance, and deposit operations")
+@SecurityRequirement(name = "bearerAuth")
 public class AccountController {
 
         private final AccountService accountService;
@@ -33,6 +40,13 @@ public class AccountController {
                 this.accountService = accountService;
         }
 
+        @Operation(summary = "Create an account", description = "Creates a new account for the authenticated customer.")
+        @ApiResponses({
+                        @ApiResponse(responseCode = "201", description = "Account created successfully"),
+                        @ApiResponse(responseCode = "400", description = "Invalid account request"),
+                        @ApiResponse(responseCode = "401", description = "Authentication required"),
+                        @ApiResponse(responseCode = "403", description = "Customer role required")
+        })
         @PreAuthorize("hasRole('CUSTOMER')")
         @PostMapping
         public ResponseEntity<AccountResponse> createAccount(
@@ -46,6 +60,12 @@ public class AccountController {
                                 .body(response);
         }
 
+        @Operation(summary = "Get my accounts", description = "Returns all accounts owned by the authenticated customer.")
+        @ApiResponses({
+                        @ApiResponse(responseCode = "200", description = "Accounts retrieved successfully"),
+                        @ApiResponse(responseCode = "401", description = "Authentication required"),
+                        @ApiResponse(responseCode = "403", description = "Customer role required")
+        })
         @PreAuthorize("hasRole('CUSTOMER')")
         @GetMapping
         public ResponseEntity<List<AccountResponse>> getMyAccounts(
@@ -55,6 +75,12 @@ public class AccountController {
                                 accountService.getMyAccounts(authentication));
         }
 
+        @Operation(summary = "Get my accounts using the current-user endpoint", description = "Returns all accounts owned by the authenticated customer.")
+        @ApiResponses({
+                        @ApiResponse(responseCode = "200", description = "Accounts retrieved successfully"),
+                        @ApiResponse(responseCode = "401", description = "Authentication required"),
+                        @ApiResponse(responseCode = "403", description = "Customer role required")
+        })
         @PreAuthorize("hasRole('CUSTOMER')")
         @GetMapping("/me")
         public ResponseEntity<List<AccountResponse>> getMyAccountsForCurrentUser(
@@ -64,6 +90,13 @@ public class AccountController {
                                 accountService.getMyAccounts(authentication));
         }
 
+        @Operation(summary = "Get an account", description = "Returns an account owned by the authenticated customer.")
+        @ApiResponses({
+                        @ApiResponse(responseCode = "200", description = "Account retrieved successfully"),
+                        @ApiResponse(responseCode = "401", description = "Authentication required"),
+                        @ApiResponse(responseCode = "403", description = "Customer role required or account ownership denied"),
+                        @ApiResponse(responseCode = "404", description = "Account not found")
+        })
         @PreAuthorize("hasRole('CUSTOMER')")
         @GetMapping("/{accountId}")
         public ResponseEntity<AccountResponse> getMyAccount(
@@ -76,6 +109,13 @@ public class AccountController {
                                                 authentication));
         }
 
+        @Operation(summary = "Get account balance", description = "Returns the balance of an account owned by the authenticated customer.")
+        @ApiResponses({
+                        @ApiResponse(responseCode = "200", description = "Balance retrieved successfully"),
+                        @ApiResponse(responseCode = "401", description = "Authentication required"),
+                        @ApiResponse(responseCode = "403", description = "Customer role required or account ownership denied"),
+                        @ApiResponse(responseCode = "404", description = "Account not found")
+        })
         @PreAuthorize("hasRole('CUSTOMER')")
         @GetMapping("/{accountId}/balance")
         public ResponseEntity<BigDecimal> getBalance(
@@ -89,6 +129,14 @@ public class AccountController {
                                                 .balance());
         }
 
+        @Operation(summary = "Deposit funds", description = "Deposits funds into an account owned by the authenticated customer.")
+        @ApiResponses({
+                        @ApiResponse(responseCode = "200", description = "Deposit completed successfully"),
+                        @ApiResponse(responseCode = "400", description = "Invalid deposit request"),
+                        @ApiResponse(responseCode = "401", description = "Authentication required"),
+                        @ApiResponse(responseCode = "403", description = "Customer role required or account ownership denied"),
+                        @ApiResponse(responseCode = "404", description = "Account not found")
+        })
         @PreAuthorize("hasRole('CUSTOMER')")
         @PostMapping("/{accountId}/deposit")
         public ResponseEntity<AccountResponse> deposit(

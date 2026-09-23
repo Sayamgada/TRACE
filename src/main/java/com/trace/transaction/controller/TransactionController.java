@@ -19,11 +19,18 @@ import com.trace.transaction.dto.CreateTransferRequest;
 import com.trace.transaction.dto.TransactionResponse;
 import com.trace.transaction.service.TransactionService;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/api/transactions")
 @Validated
+@Tag(name = "Transactions", description = "Customer transaction creation and transaction history operations")
+@SecurityRequirement(name = "bearerAuth")
 public class TransactionController {
 
         private final TransactionService transactionService;
@@ -32,7 +39,13 @@ public class TransactionController {
                 this.transactionService = transactionService;
         }
 
-
+        @Operation(summary = "Create a transfer", description = "Creates a transfer for the authenticated customer.")
+        @ApiResponses({
+                        @ApiResponse(responseCode = "201", description = "Transfer created successfully"),
+                        @ApiResponse(responseCode = "400", description = "Invalid transfer request or transaction rejected"),
+                        @ApiResponse(responseCode = "401", description = "Authentication required"),
+                        @ApiResponse(responseCode = "403", description = "Customer role required")
+        })
         @PreAuthorize("hasRole('CUSTOMER')")
         @PostMapping
         public ResponseEntity<TransactionResponse> createTransfer(
@@ -48,6 +61,13 @@ public class TransactionController {
                                 .body(response);
         }
 
+        @Operation(summary = "Get my transactions", description = "Returns a paginated list of transactions belonging to the authenticated customer. "
+                        + "Results default to 20 records sorted by creation time.")
+        @ApiResponses({
+                        @ApiResponse(responseCode = "200", description = "Transactions retrieved successfully"),
+                        @ApiResponse(responseCode = "401", description = "Authentication required"),
+                        @ApiResponse(responseCode = "403", description = "Customer role required")
+        })
         @PreAuthorize("hasRole('CUSTOMER')")
         @GetMapping
         public ResponseEntity<Page<TransactionResponse>> getMyTransactions(
@@ -60,6 +80,13 @@ public class TransactionController {
                                                 pageable));
         }
 
+        @Operation(summary = "Get transaction history", description = "Returns a paginated transaction history for the authenticated customer. "
+                        + "Results default to 20 records sorted by creation time.")
+        @ApiResponses({
+                        @ApiResponse(responseCode = "200", description = "Transaction history retrieved successfully"),
+                        @ApiResponse(responseCode = "401", description = "Authentication required"),
+                        @ApiResponse(responseCode = "403", description = "Customer role required")
+        })
         @PreAuthorize("hasRole('CUSTOMER')")
         @GetMapping("/history")
         public ResponseEntity<Page<TransactionResponse>> getTransactionHistory(
@@ -72,6 +99,13 @@ public class TransactionController {
                                                 pageable));
         }
 
+        @Operation(summary = "Get a transaction", description = "Returns a transaction accessible to the authenticated customer.")
+        @ApiResponses({
+                        @ApiResponse(responseCode = "200", description = "Transaction retrieved successfully"),
+                        @ApiResponse(responseCode = "401", description = "Authentication required"),
+                        @ApiResponse(responseCode = "403", description = "Customer role required or transaction ownership denied"),
+                        @ApiResponse(responseCode = "404", description = "Transaction not found")
+        })
         @PreAuthorize("hasRole('CUSTOMER')")
         @GetMapping("/{transactionId}")
         public ResponseEntity<TransactionResponse> getMyTransaction(

@@ -16,8 +16,16 @@ import com.trace.fraud.alert.FraudAlertStatus;
 import com.trace.fraud.alert.dto.FraudAlertResponse;
 import com.trace.fraud.service.FraudAlertService;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
+
 @RestController
 @RequestMapping("/api/fraud/alerts")
+@Tag(name = "Fraud Alerts", description = "Fraud alert monitoring and investigation endpoints")
+@SecurityRequirement(name = "bearerAuth")
 public class FraudAlertController {
 
     private final FraudAlertService fraudAlertService;
@@ -26,12 +34,21 @@ public class FraudAlertController {
         this.fraudAlertService = fraudAlertService;
     }
 
+    @Operation(summary = "List fraud alerts", description = "Returns a paginated list of fraud alerts for fraud analysts. "
+            + "Alerts can optionally be filtered by status and severity.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Fraud alerts retrieved successfully"),
+            @ApiResponse(responseCode = "400", description = "Invalid status, severity, or pagination parameter"),
+            @ApiResponse(responseCode = "401", description = "Authentication required"),
+            @ApiResponse(responseCode = "403", description = "Fraud analyst role required")
+    })
     @PreAuthorize("hasRole('FRAUD_ANALYST')")
     @GetMapping
     public Page<FraudAlertResponse> getAlerts(
             @RequestParam(name = "status", required = false) FraudAlertStatus status,
             @RequestParam(name = "severity", required = false) FraudAlertSeverity severity,
             Pageable pageable) {
+
         Page<FraudAlert> alerts;
 
         if (status != null && severity != null) {
@@ -50,10 +67,18 @@ public class FraudAlertController {
         return alerts.map(this::toResponse);
     }
 
+    @Operation(summary = "Get a fraud alert", description = "Returns a specific fraud alert by its identifier.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Fraud alert retrieved successfully"),
+            @ApiResponse(responseCode = "401", description = "Authentication required"),
+            @ApiResponse(responseCode = "403", description = "Fraud analyst role required"),
+            @ApiResponse(responseCode = "404", description = "Fraud alert not found")
+    })
     @PreAuthorize("hasRole('FRAUD_ANALYST')")
     @GetMapping("/{alertId}")
     public ResponseEntity<FraudAlertResponse> getAlert(
             @PathVariable Long alertId) {
+
         return ResponseEntity.ok(
                 toResponse(fraudAlertService.getAlert(alertId)));
     }

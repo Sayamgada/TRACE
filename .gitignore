@@ -40,3 +40,5 @@ build/
 src/main/resources/application-dev.properties
 
 docs/
+
+commands.txt
